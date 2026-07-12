@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 
+from orviqo.adapters.audit import InMemoryAuditLog
 from orviqo.adapters.ledger import InMemoryLedger
 from orviqo.agents.intake import PydanticAIIntakeParser
 from orviqo.config import ConfigError, bootstrap
@@ -30,6 +31,7 @@ async def _run(messages: list[str]) -> None:
     service = IntakeService(
         parser=PydanticAIIntakeParser(),
         ledger=InMemoryLedger(),
+        audit=InMemoryAuditLog(),
         confidence_threshold=settings.intake_confidence_threshold,
     )
     for msg in messages:

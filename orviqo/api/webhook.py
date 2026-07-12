@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, Request, Response
 
 from orviqo.adapters.db import create_schema, make_engine
+from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.whatsapp import LoggingWhatsAppClient, iter_text_messages
 from orviqo.agents.intake import PydanticAIIntakeParser
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.service = IntakeService(
         parser=PydanticAIIntakeParser(),
         ledger=SqlAlchemyLedger(engine),
+        audit=SqlAlchemyAuditLog(engine),
         confidence_threshold=settings.intake_confidence_threshold,
     )
     app.state.whatsapp = LoggingWhatsAppClient()

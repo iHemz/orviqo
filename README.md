@@ -33,7 +33,7 @@ orviqo/
 ├── domain/        pure types (Invoice, ParsedInvoice) — no I/O
 ├── agents/        base.py = InvoiceParser port · intake.py = Pydantic AI impl
 ├── services/      intake_service.py — the rigor gate (record vs. ask)
-├── adapters/      ledger.py + sql_ledger.py (LedgerStore) · db.py · whatsapp.py
+├── adapters/      ledger + sql_ledger (LedgerStore) · audit + sql_audit (AuditLog) · db · whatsapp
 ├── api/           webhook.py — FastAPI, wired via create_app()
 ├── cli.py         terminal entry point
 └── config.py      settings + bootstrap()
@@ -64,5 +64,7 @@ make test           # same as `uv run pytest -q` (see Makefile for all tasks)
 - **Durable ledger ✅** — `SqlAlchemyLedger` (async SQLAlchemy 2.0) behind the
   `LedgerStore` port. Postgres in prod (`DATABASE_URL=postgresql+asyncpg://…`),
   SQLite by default for local dev. The API wires it via a FastAPI lifespan.
-- Next: real WhatsApp Cloud API client (`WhatsAppClient`), Alembic migrations,
-  and an `audit_log` so every recorded action carries a citation.
+- **Audit log ✅** — every decision (recorded *and* refused) is written to
+  `audit_log` with its source message, confidence, and reason — the durable
+  proof that Orviqo never invents a number.
+- Next: real WhatsApp Cloud API client (`WhatsAppClient`) and Alembic migrations.

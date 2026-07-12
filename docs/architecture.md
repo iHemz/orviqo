@@ -18,6 +18,8 @@ WhatsApp client — without touching it.
   ┌────────────────────────────────────────────────────────────┐
   │ adapters/ledger.py   (LedgerStore ← InMemoryLedger)          │
   │ adapters/sql_ledger  (LedgerStore ← SqlAlchemyLedger)        │
+  │ adapters/audit.py    (AuditLog ← InMemoryAuditLog)           │
+  │ adapters/sql_audit   (AuditLog ← SqlAlchemyAuditLog)         │
   │ adapters/whatsapp.py (WhatsAppClient ← LoggingClient)        │
   │ agents/base.py       (InvoiceParser ← PydanticAIParser)      │
   └────────────────────────────────────────────────────────────┘
@@ -35,12 +37,13 @@ WhatsApp client — without touching it.
 
 ## Why the ports (and why not more)
 
-We invert exactly two dependencies, and only because each has a *second, real*
-use today — not a hypothetical one:
+We invert three dependencies, and only because each has a *second, real* use
+today — not a hypothetical one:
 
 - **`LedgerStore`** — `InMemoryLedger` (CLI demo, tests) and `SqlAlchemyLedger`
   (Postgres in prod, SQLite for local dev) both satisfy it; the composition root
   picks one. Swapping them changed **zero** lines in `services`.
+- **`AuditLog`** — same story: in-memory for the CLI/tests, SQLAlchemy in prod.
 - **`InvoiceParser`** — tests inject a `FakeParser` so the suite runs offline.
 
 Everything else is concrete. We add an abstraction on the second real use, not
@@ -60,8 +63,13 @@ whether it's talking to Postgres or SQLite, and its tests
 `IntakeService.handle_message` records an invoice **only** when the parse is
 confident, unambiguous, and has an amount. Otherwise it asks. This is the
 product's trust promise expressed as one branch, and
-`tests/test_intake_service.py` pins all three refusal paths. Week 2 extends it
-with an `audit_log` so every recorded action carries a citation.
+`tests/test_intake_service.py` pins all three refusal paths.
+
+**Every** decision — recorded *or* refused — is written to the `audit_log` with
+the source message (the citation), the confidence, and the reason. The refusals
+are the most valuable rows: they are the evidence that Orviqo didn't invent a
+number. (Ledger write and audit write are separate transactions today; a single
+transaction / outbox is a later hardening.)
 
 ## Configuration & the composition root
 
@@ -75,5 +83,5 @@ lets the tests import freely.
 
 The week-by-week plan lives in the
 [spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md).
-Week 2 (in progress): durable ledger ✅ · next up the real WhatsApp Cloud API
-client, Alembic migrations, and the `audit_log`.
+Week 2 (in progress): durable ledger ✅ · audit log ✅ · next up the real
+WhatsApp Cloud API client and Alembic migrations.

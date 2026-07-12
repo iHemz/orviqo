@@ -40,6 +40,20 @@ invoices = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 
+# Every rigor-gate decision, recorded or refused — the durable trust layer (spec §8).
+audit_log = Table(
+    "audit_log",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("business_id", String, nullable=False, index=True),
+    Column("message", String, nullable=False),  # the citation: what came in
+    Column("decision", String, nullable=False),  # "recorded" | "asked"
+    Column("confidence", Float, nullable=False),
+    Column("reason", String, nullable=False),  # the reply / clarify question
+    Column("invoice_id", String, nullable=True, index=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 
 def make_engine(url: str) -> AsyncEngine:
     return create_async_engine(url)
