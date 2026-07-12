@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # The rigor gate: below this confidence the agent asks instead of recording.
     intake_confidence_threshold: float = 0.9
 
+    # Ledger database. SQLite by default (zero setup); prod sets Postgres via
+    # DATABASE_URL, e.g. postgresql+asyncpg://user:pass@host:5432/orviqo
+    database_url: str = "sqlite+aiosqlite:///./orviqo.db"
+
     whatsapp_verify_token: str = ""
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""

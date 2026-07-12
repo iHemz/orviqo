@@ -15,11 +15,12 @@ WhatsApp client — without touching it.
   └───────────────────┘      └────────┬─────────┘   └──────────────┘
         │  wires concrete adapters     │ depends on PORTS only
         ▼                              ▼
-  ┌──────────────────────────────────────────────┐
-  │ adapters/ledger.py   (LedgerStore  ← InMemoryLedger)   │
-  │ adapters/whatsapp.py (WhatsAppClient ← LoggingClient)  │
-  │ agents/base.py       (InvoiceParser ← PydanticAIParser)│
-  └──────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────────┐
+  │ adapters/ledger.py   (LedgerStore ← InMemoryLedger)          │
+  │ adapters/sql_ledger  (LedgerStore ← SqlAlchemyLedger)        │
+  │ adapters/whatsapp.py (WhatsAppClient ← LoggingClient)        │
+  │ agents/base.py       (InvoiceParser ← PydanticAIParser)      │
+  └────────────────────────────────────────────────────────────┘
 ```
 
 ## Layers
@@ -37,11 +38,22 @@ WhatsApp client — without touching it.
 We invert exactly two dependencies, and only because each has a *second, real*
 use today — not a hypothetical one:
 
-- **`LedgerStore`** — Week 2 replaces `InMemoryLedger` with `PostgresLedger`.
+- **`LedgerStore`** — `InMemoryLedger` (CLI demo, tests) and `SqlAlchemyLedger`
+  (Postgres in prod, SQLite for local dev) both satisfy it; the composition root
+  picks one. Swapping them changed **zero** lines in `services`.
 - **`InvoiceParser`** — tests inject a `FakeParser` so the suite runs offline.
 
 Everything else is concrete. We add an abstraction on the second real use, not
 in anticipation of one.
+
+## The ledger is async — on purpose
+
+`LedgerStore` is an async protocol because the durable adapter does real
+network I/O; a blocking DB call would stall the event loop that FastAPI and the
+LLM calls share. `SqlAlchemyLedger` uses SQLAlchemy 2.0 async Core and takes an
+`AsyncEngine` injected by the composition root — so the adapter never knows
+whether it's talking to Postgres or SQLite, and its tests
+(`tests/test_sql_ledger.py`) run against a real SQLite file, no mocks.
 
 ## The rigor gate
 
@@ -63,4 +75,5 @@ lets the tests import freely.
 
 The week-by-week plan lives in the
 [spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md).
-Week 2: `PostgresLedger`, the real WhatsApp Cloud API client, and the audit log.
+Week 2 (in progress): durable ledger ✅ · next up the real WhatsApp Cloud API
+client, Alembic migrations, and the `audit_log`.

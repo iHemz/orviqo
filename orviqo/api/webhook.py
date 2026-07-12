@@ -1,33 +1,46 @@
 """FastAPI WhatsApp webhook — the composition root for the HTTP entry point.
 
-``create_app()`` wires the concrete adapters into the service (dependency
-injection by hand — no framework magic). Run it with uvicorn's factory mode so
-nothing is constructed at import time:
+The durable ledger needs an async engine with a real lifecycle, so wiring happens
+in a lifespan handler (open engine + ensure schema on startup, dispose on
+shutdown) rather than at import. Run with uvicorn factory mode:
 
     uvicorn --factory orviqo.api.webhook:create_app --reload
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Query, Request, Response
 
-from orviqo.adapters.ledger import InMemoryLedger
+from orviqo.adapters.db import create_schema, make_engine
+from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.whatsapp import LoggingWhatsAppClient, iter_text_messages
 from orviqo.agents.intake import PydanticAIIntakeParser
-from orviqo.config import bootstrap
+from orviqo.config import bootstrap, settings
 from orviqo.services.intake_service import IntakeService
 
 
-def create_app() -> FastAPI:
-    settings = bootstrap()
-    service = IntakeService(
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    bootstrap()  # fail fast on a missing key; export it for Pydantic AI
+    engine = make_engine(settings.database_url)
+    await create_schema(engine)  # dev convenience; prod uses Alembic migrations
+    app.state.service = IntakeService(
         parser=PydanticAIIntakeParser(),
-        ledger=InMemoryLedger(),
+        ledger=SqlAlchemyLedger(engine),
         confidence_threshold=settings.intake_confidence_threshold,
     )
-    whatsapp = LoggingWhatsAppClient()
+    app.state.whatsapp = LoggingWhatsAppClient()
+    try:
+        yield
+    finally:
+        await engine.dispose()
 
-    app = FastAPI(title="Orviqo — receivables agent")
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="Orviqo — receivables agent", lifespan=lifespan)
 
     @app.get("/webhook")
     def verify(
@@ -42,6 +55,8 @@ def create_app() -> FastAPI:
 
     @app.post("/webhook")
     async def inbound(request: Request) -> dict:
+        service: IntakeService = request.app.state.service
+        whatsapp: LoggingWhatsAppClient = request.app.state.whatsapp
         payload = await request.json()
         for sender, text in iter_text_messages(payload):
             reply = await service.handle_message(sender, text)

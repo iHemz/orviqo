@@ -49,5 +49,5 @@ class IntakeService:
         if parsed.confidence < self._threshold or parsed.clarify or parsed.amount_ngn is None:
             return Reply(text=parsed.clarify or _FALLBACK_ASK)
 
-        invoice = self._ledger.add(parsed, business_id)
+        invoice = await self._ledger.add(parsed, business_id)
         return Reply(text=_confirmation(invoice), recorded_invoice_id=invoice.id)
