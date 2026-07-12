@@ -37,8 +37,10 @@ question. When in doubt, ask.
 class PydanticAIIntakeParser:
     """An ``InvoiceParser`` that calls Claude via Pydantic AI.
 
-    The agent is built lazily in ``__init__`` (not at module import) so that
-    importing this module has no side effects and needs no API key.
+    The agent is constructed in ``__init__`` (not at module import), so importing
+    this module has no side effects. Construction itself needs ``ANTHROPIC_API_KEY``
+    in the environment — Pydantic AI infers the provider eagerly — which
+    ``config.bootstrap()`` guarantees before any entry point builds the parser.
     """
 
     def __init__(self, model: str | None = None) -> None:

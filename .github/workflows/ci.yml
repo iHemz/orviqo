@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-      - name: Install
-        run: pip install -e ".[dev]"
+          enable-cache: true
+      - name: Sync (installs the right Python + deps from uv.lock)
+        run: uv sync
       - name: Lint
-        run: ruff check .
+        run: uv run ruff check .
       - name: Test
-        run: pytest -q
+        run: uv run pytest -q

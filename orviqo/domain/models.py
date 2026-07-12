@@ -9,12 +9,12 @@ number to the ledger.
 from __future__ import annotations
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class InvoiceStatus(str, Enum):
+class InvoiceStatus(StrEnum):
     open = "open"
     paid = "paid"
     disputed = "disputed"

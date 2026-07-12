@@ -10,28 +10,26 @@ for the full plan and [`docs/architecture.md`](docs/architecture.md) for the des
 
 ## Quickstart
 
-The package lives under `src/`, so it must be **installed** to be importable —
-you can't run a loose script with bare `python`. That's deliberate: it forces
-you to test against the real, installed package.
+Uses [uv](https://docs.astral.sh/uv/). `uv sync` creates the virtualenv, writes
+`uv.lock`, and installs everything (deps + dev tools) — one command, reproducible.
 
 ```bash
 cd orviqo
-python -m venv .venv && . .venv/Scripts/activate   # Windows; use .venv/bin/activate on macOS/Linux
-pip install -e ".[dev]"                            # or: make dev
+uv sync
 
-cp .env.example .env                               # add ANTHROPIC_API_KEY
+cp .env.example .env          # add ANTHROPIC_API_KEY
 
-orviqo "Chidi owes 150k for the generator, due Friday"   # console entry point
-# or: python -m orviqo "..."
+uv run orviqo "Chidi owes 150k for the generator, due Friday"
+# or: uv run python -m orviqo "..."
 ```
 
-Ambiguous input is where the design shows: `orviqo "Mama Nkechi never paid for
-the rice"` returns a **question**, not an invented amount.
+Ambiguous input is where the design shows: `uv run orviqo "Mama Nkechi never
+paid for the rice"` returns a **question**, not an invented amount.
 
 ## Layout
 
 ```
-src/orviqo/
+orviqo/
 ├── domain/        pure types (Invoice, ParsedInvoice) — no I/O
 ├── agents/        base.py = InvoiceParser port · intake.py = Pydantic AI impl
 ├── services/      intake_service.py — the rigor gate (record vs. ask)
@@ -55,13 +53,11 @@ adapters to the service. See [`docs/architecture.md`](docs/architecture.md).
 ## Develop
 
 ```bash
-make test        # pytest — runs offline, no API key needed
-make lint        # ruff
-make typecheck   # mypy
-make run         # uvicorn --factory orviqo.api.webhook:create_app --reload
+uv run pytest       # offline, no API key needed
+uv run ruff check .
+uv run mypy
+make test           # same as `uv run pytest -q` (see Makefile for all tasks)
 ```
-
-(No `make` on Windows? Run the underlying command from the [Makefile](Makefile).)
 
 ## Next (Week 2)
 

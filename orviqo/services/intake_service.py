@@ -12,6 +12,8 @@ from orviqo.adapters.ledger import LedgerStore
 from orviqo.agents.base import InvoiceParser
 from orviqo.domain.models import Invoice
 
+_FALLBACK_ASK = "Sorry, I didn't fully get that — how much is owed, and by when?"
+
 
 class Reply(BaseModel):
     """What Orviqo says back. ``recorded_invoice_id`` is set only when we wrote."""
@@ -45,9 +47,7 @@ class IntakeService:
         # The rigor gate. Never record on low confidence, an open question, or a
         # missing amount — ask instead. A wrong ledger entry is worse than a question.
         if parsed.confidence < self._threshold or parsed.clarify or parsed.amount_ngn is None:
-            return Reply(
-                text=parsed.clarify or "Sorry, I didn't fully get that — how much is owed, and by when?"
-            )
+            return Reply(text=parsed.clarify or _FALLBACK_ASK)
 
         invoice = self._ledger.add(parsed, business_id)
         return Reply(text=_confirmation(invoice), recorded_invoice_id=invoice.id)
