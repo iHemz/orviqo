@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query, Request, Response
 
-from orviqo.adapters.db import create_schema, make_engine
+from orviqo.adapters.db import make_engine
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.whatsapp import LoggingWhatsAppClient, iter_text_messages
@@ -27,7 +27,7 @@ from orviqo.services.intake_service import IntakeService
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bootstrap()  # fail fast on a missing key; export it for Pydantic AI
     engine = make_engine(settings.database_url)
-    await create_schema(engine)  # dev convenience; prod uses Alembic migrations
+    # Schema is managed by Alembic — run `uv run alembic upgrade head` before starting.
     app.state.service = IntakeService(
         parser=PydanticAIIntakeParser(),
         ledger=SqlAlchemyLedger(engine),

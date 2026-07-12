@@ -53,11 +53,17 @@ adapters to the service. See [`docs/architecture.md`](docs/architecture.md).
 ## Develop
 
 ```bash
-uv run pytest       # offline, no API key needed
+uv run pytest              # offline, no API key needed
 uv run ruff check .
 uv run mypy
-make test           # same as `uv run pytest -q` (see Makefile for all tasks)
+uv run alembic upgrade head   # apply migrations (make migrate)
+make test                  # see Makefile for all tasks
 ```
+
+Running the webhook server applies migrations first: `make run` (or
+`uv run alembic upgrade head` then `uv run uvicorn --factory
+orviqo.api.webhook:create_app`). Tests don't need migrations — they build the
+schema from the model metadata directly.
 
 ## Week 2
 
@@ -67,4 +73,6 @@ make test           # same as `uv run pytest -q` (see Makefile for all tasks)
 - **Audit log ✅** — every decision (recorded *and* refused) is written to
   `audit_log` with its source message, confidence, and reason — the durable
   proof that Orviqo never invents a number.
-- Next: real WhatsApp Cloud API client (`WhatsAppClient`) and Alembic migrations.
+- **Migrations ✅** — Alembic manages the schema (`migrations/`); the app no
+  longer auto-creates tables at startup. `uv run alembic upgrade head` to apply.
+- Next: real WhatsApp Cloud API client (`WhatsAppClient`).

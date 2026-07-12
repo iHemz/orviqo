@@ -1,5 +1,5 @@
 # Common developer tasks. On Windows without `make`, run the commands directly.
-.PHONY: dev lint format typecheck test run try check
+.PHONY: dev lint format typecheck test migrate revision run try check
 
 dev:            ## Sync the venv from uv.lock (deps + dev tools)
 	uv sync
@@ -16,7 +16,13 @@ typecheck:      ## Type-check the package
 test:           ## Run the offline test suite
 	uv run pytest -q
 
-run:            ## Start the webhook server (needs ANTHROPIC_API_KEY)
+migrate:        ## Apply database migrations
+	uv run alembic upgrade head
+
+revision:       ## Autogenerate a migration from model changes (msg="...")
+	uv run alembic revision --autogenerate -m "$(msg)"
+
+run: migrate    ## Migrate, then start the webhook server (needs ANTHROPIC_API_KEY)
 	uv run uvicorn --factory orviqo.api.webhook:create_app --reload
 
 try:            ## Try the intake agent (needs ANTHROPIC_API_KEY)

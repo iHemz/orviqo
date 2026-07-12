@@ -83,5 +83,13 @@ lets the tests import freely.
 
 The week-by-week plan lives in the
 [spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md).
-Week 2 (in progress): durable ledger ✅ · audit log ✅ · next up the real
-WhatsApp Cloud API client and Alembic migrations.
+Week 2 (in progress): durable ledger ✅ · audit log ✅ · Alembic migrations ✅ ·
+next up the real WhatsApp Cloud API client.
+
+## Migrations
+
+The schema is owned by Alembic (`migrations/`), not by the app — `create_schema`
+(metadata `create_all`) survives only as the fast path for tests, which build a
+throwaway SQLite schema per run and don't need migration history. Production runs
+`alembic upgrade head` on deploy. `migrations/env.py` reads the app's `metadata`
+and `settings.database_url`, so autogenerate and the app never drift.
