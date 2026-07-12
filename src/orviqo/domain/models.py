@@ -1,9 +1,9 @@
-"""Pydantic schemas — the shape of the ledger.
+"""Domain models — the shape of the ledger.
 
-`ParsedInvoice` is what the intake agent returns. Note the `confidence` and
-`clarify` fields: they are the rigor layer. The agent is instructed never to
-invent an amount or date — when it isn't sure, it lowers confidence and asks
-a clarifying question rather than writing a wrong number to the ledger.
+``ParsedInvoice`` is what the intake agent returns. The ``confidence`` and
+``clarify`` fields are the rigor layer: the agent never invents an amount or a
+date — when unsure it lowers confidence and asks, rather than writing a wrong
+number to the ledger.
 """
 
 from __future__ import annotations
@@ -21,16 +21,14 @@ class InvoiceStatus(str, Enum):
 
 
 class ParsedInvoice(BaseModel):
-    """Structured invoice extracted from a natural-language message."""
+    """A structured invoice extracted from a natural-language message."""
 
     debtor_name: str = Field(description="Who owes the money.")
     amount_ngn: int | None = Field(
         default=None,
-        description="Amount owed in naira. Null if the message is ambiguous — do NOT guess.",
+        description="Amount owed in naira. Null if ambiguous — do NOT guess.",
     )
-    item: str | None = Field(
-        default=None, description="What the debt is for, if stated."
-    )
+    item: str | None = Field(default=None, description="What the debt is for, if stated.")
     due_date: date | None = Field(
         default=None,
         description="When payment is due. Null if not clearly stated — do NOT guess.",
@@ -42,7 +40,7 @@ class ParsedInvoice(BaseModel):
     )
     clarify: str | None = Field(
         default=None,
-        description="If any field is null or uncertain, a short question to ask the owner.",
+        description="A short question to ask the owner when a field is null or uncertain.",
     )
 
 

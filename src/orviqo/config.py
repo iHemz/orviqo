@@ -1,6 +1,20 @@
-"""Settings loaded from environment / .env."""
+"""Application configuration — the single source of truth for settings.
+
+Values load from the environment (and a local ``.env``). ``bootstrap()`` is the
+composition root's first call: it fails fast when the API key is missing and
+exports it so downstream libraries (Pydantic AI's Anthropic client, which reads
+``os.environ``) can see a key that otherwise only lived in ``.env``.
+"""
+
+from __future__ import annotations
+
+import os
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ConfigError(RuntimeError):
+    """Raised when required configuration is missing or invalid."""
 
 
 class Settings(BaseSettings):
@@ -9,13 +23,34 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
 
     # Pydantic AI provider strings. Haiku is cheap+fast for parsing;
-    # Opus 4.8 is the reasoning model for collections/reconciliation later.
+    # Opus 4.8 is the reasoning model for collections/reconciliation (Week 3+).
     orviqo_intake_model: str = "anthropic:claude-haiku-4-5"
     orviqo_reasoning_model: str = "anthropic:claude-opus-4-8"
+
+    # The rigor gate: below this confidence the agent asks instead of recording.
+    intake_confidence_threshold: float = 0.9
 
     whatsapp_verify_token: str = ""
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""
 
+    def require_anthropic_key(self) -> None:
+        if not self.anthropic_api_key:
+            raise ConfigError(
+                "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key, "
+                "or export ANTHROPIC_API_KEY in your shell."
+            )
+
 
 settings = Settings()
+
+
+def bootstrap() -> Settings:
+    """Validate config and expose the API key to downstream libraries.
+
+    Call once, at the start of an entry point (CLI, API factory) — never at
+    import time, so importing a module stays free of side effects.
+    """
+    settings.require_anthropic_key()
+    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
+    return settings

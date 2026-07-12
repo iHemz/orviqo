@@ -1,8 +1,8 @@
-"""Intake agent: natural-language message -> ParsedInvoice.
+"""Intake parser backed by a Pydantic AI agent (the cheap Haiku model).
 
-Uses the cheap/fast model (Haiku 4.5) via Pydantic AI. The system prompt is the
-rigor layer in words: extract what's stated, and when a field is missing or
-ambiguous, leave it null and ask — never guess an amount or a date.
+The system prompt is the rigor layer in words: extract what's stated, and when
+a field is missing or ambiguous leave it null and ask — never guess an amount
+or a date. Implements the ``InvoiceParser`` port in ``agents.base``.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from datetime import date
 
 from pydantic_ai import Agent
 
-from ..config import settings
-from ..models import ParsedInvoice
+from orviqo.config import settings
+from orviqo.domain.models import ParsedInvoice
 
 _SYSTEM_PROMPT = """
 You extract a structured invoice from a Nigerian SMB owner's WhatsApp message
@@ -34,19 +34,24 @@ question. When in doubt, ask.
 """.strip()
 
 
-intake_agent = Agent(
-    settings.orviqo_intake_model,
-    output_type=ParsedInvoice,
-    system_prompt=_SYSTEM_PROMPT,
-)
+class PydanticAIIntakeParser:
+    """An ``InvoiceParser`` that calls Claude via Pydantic AI.
 
+    The agent is built lazily in ``__init__`` (not at module import) so that
+    importing this module has no side effects and needs no API key.
+    """
 
-@intake_agent.system_prompt
-def _todays_date() -> str:
-    return f"Today's date is {date.today().isoformat()}."
+    def __init__(self, model: str | None = None) -> None:
+        self._agent = Agent(
+            model or settings.orviqo_intake_model,
+            output_type=ParsedInvoice,
+            system_prompt=_SYSTEM_PROMPT,
+        )
 
+        @self._agent.system_prompt
+        def _todays_date() -> str:
+            return f"Today's date is {date.today().isoformat()}."
 
-async def parse_message(message: str) -> ParsedInvoice:
-    """Parse one NL message into a structured (possibly-incomplete) invoice."""
-    result = await intake_agent.run(message)
-    return result.output
+    async def parse(self, message: str) -> ParsedInvoice:
+        result = await self._agent.run(message)
+        return result.output

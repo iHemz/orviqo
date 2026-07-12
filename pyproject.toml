@@ -1,7 +1,7 @@
 [project]
 name = "orviqo"
 version = "0.1.0"
-description = "WhatsApp-native receivables agent for Nigerian SMBs (Week 1 scaffold)"
+description = "WhatsApp-native receivables agent for Nigerian SMBs"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic-ai>=0.0.14",
@@ -15,8 +15,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff>=0.4",
+    "mypy>=1.10",
     "pytest>=8",
+    "pytest-asyncio>=0.23",
 ]
+
+[project.scripts]
+orviqo = "orviqo.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -27,3 +32,18 @@ packages = ["src/orviqo"]
 
 [tool.ruff]
 line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+packages = ["orviqo"]
+ignore_missing_imports = true
+check_untyped_defs = true
