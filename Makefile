@@ -1,5 +1,5 @@
 # Common developer tasks. On Windows without `make`, run the commands directly.
-.PHONY: dev lint format typecheck test simulate migrate revision run try check
+.PHONY: dev lint format typecheck test simulate worker migrate revision run try check
 
 dev:            ## Sync the venv from uv.lock (deps + dev tools)
 	uv sync
@@ -18,6 +18,9 @@ test:           ## Run the offline test suite
 
 simulate:       ## Simulate an inbound WhatsApp message. msg="..." [url=...]
 	uv run python tools/simulate_inbound.py "$(msg)" --url "$(or $(url),http://localhost:8000/webhook)"
+
+worker:         ## Run the reminder worker a single pass (needs secrets)
+	uv run python -m orviqo.worker --once
 
 migrate:        ## Apply database migrations
 	uv run alembic upgrade head

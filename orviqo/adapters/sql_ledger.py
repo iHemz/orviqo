@@ -7,6 +7,7 @@ root decides the database; the adapter has no idea which one it's talking to.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from sqlalchemy import insert, select
 from sqlalchemy import update as sa_update
@@ -61,6 +62,16 @@ class SqlAlchemyLedger:
         stmt = select(invoices).where(
             invoices.c.business_id == business_id,
             invoices.c.status == InvoiceStatus.open.value,
+        )
+        async with self._engine.connect() as conn:
+            result = await conn.execute(stmt)
+            return [self._to_invoice(row) for row in result]
+
+    async def overdue(self, as_of: date) -> list[Invoice]:
+        stmt = select(invoices).where(
+            invoices.c.status == InvoiceStatus.open.value,
+            invoices.c.due_date.is_not(None),
+            invoices.c.due_date < as_of,
         )
         async with self._engine.connect() as conn:
             result = await conn.execute(stmt)

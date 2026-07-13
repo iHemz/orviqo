@@ -54,6 +54,15 @@ audit_log = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+# One row per reminder digest sent to a business owner — used to avoid re-spamming.
+reminders = Table(
+    "reminders",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("business_id", String, nullable=False, index=True),
+    Column("sent_at", DateTime(timezone=True), nullable=False),
+)
+
 
 def make_engine(url: str) -> AsyncEngine:
     return create_async_engine(url)

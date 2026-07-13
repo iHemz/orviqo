@@ -85,3 +85,18 @@ async def test_update_persists_changes(ledger: SqlAlchemyLedger) -> None:
     [got] = await ledger.open_invoices("biz1")
     assert got.item == "generator"
     assert got.amount_ngn == 250_000
+
+
+async def test_overdue_returns_only_past_due_open_invoices(ledger: SqlAlchemyLedger) -> None:
+    async def add(name: str, due: date | None) -> None:
+        await ledger.add(
+            ParsedInvoice(debtor_name=name, amount_ngn=100_000, due_date=due, confidence=1.0), "b"
+        )
+
+    await add("Late", date(2026, 7, 1))
+    await add("Future", date(2026, 7, 30))
+    await add("NoDate", None)
+
+    result = await ledger.overdue(date(2026, 7, 20))
+
+    assert [i.debtor_name for i in result] == ["Late"]

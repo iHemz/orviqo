@@ -81,6 +81,24 @@ Then subscribe to the **messages** webhook field, and (while the Meta app is
 unpublished) add your own number as a tester. Send a WhatsApp to the test number
 — the app parses it, records or asks, and replies.
 
+## The reminder worker
+
+`fly deploy` starts **two** process groups (`fly.toml` `[processes]`): the `web`
+service (the webhook) and a `worker` (`python -m orviqo.worker`) — a daily loop
+that sends each owner a digest of their overdue debts. Test a single pass:
+
+```bash
+fly ssh console -C "python -m orviqo.worker --once"   # or, locally: make worker
+```
+
+> ⚠️ **Proactive sends need an approved template.** WhatsApp forbids free-form
+> business→user messages outside a 24-hour window of the user's last message. A
+> scheduled reminder is almost always outside that window, so it must go out as a
+> **Meta-approved message template**. Until you register one and point the sender
+> at it, the worker's digest only lands for owners who messaged recently (inside
+> 24h). Registering the template is a Meta-dashboard step; the digest text in
+> `reminder_service.py` maps to it.
+
 ## Notes & honest caveats
 
 - **Not verifiable from a laptop without Docker + a Fly account.** The app code

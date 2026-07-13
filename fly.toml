@@ -11,8 +11,15 @@ primary_region = 'fra'  # Frankfurt — co-located with the Neon Postgres (EU Ce
 [deploy]
   release_command = 'alembic upgrade head'
 
+# Two process groups on their own machines: the web service (webhook) and the
+# reminder worker (a daily loop). `fly deploy` runs both.
+[processes]
+  web = 'uvicorn --factory orviqo.api.webhook:create_app --host 0.0.0.0 --port 8000'
+  worker = 'python -m orviqo.worker'
+
 [http_service]
   internal_port = 8000
+  processes = ['web']
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true

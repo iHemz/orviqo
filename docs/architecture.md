@@ -93,8 +93,10 @@ lets the tests import freely.
 The week-by-week plan lives in the
 [spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md).
 Week 2 ✅: durable ledger · audit log · Alembic migrations · WhatsApp Cloud API
-client. The inbound→parse→gate→reply loop is closed end to end. Next: Week 3
-(reminders, reconciliation) on the same ports.
+client. Conversational intake ✅ (create/update/query/clarify). Reminder engine ✅
+— `ReminderService` + a scheduled `worker` process (2nd Fly process) send owners
+a daily overdue digest, on the same ports. Next: reconciliation (match payments
+to invoices), and chasing the *debtor* (needs debtor contacts + WhatsApp opt-in).
 
 ## Migrations
 

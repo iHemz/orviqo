@@ -12,6 +12,7 @@ loop on a DB round-trip would stall the whole app.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Protocol
 
 from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
@@ -23,6 +24,8 @@ class LedgerStore(Protocol):
     async def update(self, invoice: Invoice) -> None: ...
 
     async def open_invoices(self, business_id: str) -> list[Invoice]: ...
+
+    async def overdue(self, as_of: date) -> list[Invoice]: ...
 
 
 class InMemoryLedger:
@@ -49,4 +52,13 @@ class InMemoryLedger:
             inv
             for inv in self._invoices.values()
             if inv.business_id == business_id and inv.status is InvoiceStatus.open
+        ]
+
+    async def overdue(self, as_of: date) -> list[Invoice]:
+        return [
+            inv
+            for inv in self._invoices.values()
+            if inv.status is InvoiceStatus.open
+            and inv.due_date is not None
+            and inv.due_date < as_of
         ]
