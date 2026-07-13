@@ -97,8 +97,13 @@ client. Conversational intake ✅ (create/update/query/clarify). Reminder engine
 — `ReminderService` + a scheduled `worker` process (2nd Fly process) send owners
 a daily overdue digest, on the same ports. Reconciliation ✅ — a `payment` intent
 settles or reduces an invoice from plain messages ("Chidi paid 50k", "Randi
-cleared her debt"), writing each payment to a durable `payments` ledger. Next:
-chasing the *debtor* directly (needs debtor contacts + WhatsApp opt-in).
+cleared her debt"), writing each payment to a durable `payments` ledger.
+Debtor-chasing ✅ — owner-attested consent: a `contact` intent saves a debtor's
+number, `ChaseService` (2nd worker pass) messages debtors with overdue debts via
+an approved template, and inbound routing honors STOP (opt-out) before owner
+intake ever sees the message. Chasing is gated on `WHATSAPP_CHASE_TEMPLATE`;
+unset, the chase pass is a safe no-op. Next: partial-payment intelligence and
+richer debtor conversations (owner-notification on replies).
 
 ## Migrations
 

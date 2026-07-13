@@ -35,6 +35,8 @@ def iter_text_messages(payload: dict) -> Iterator[tuple[str, str]]:
 class WhatsAppClient(Protocol):
     async def send_text(self, to: str, text: str) -> None: ...
 
+    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> None: ...
+
     async def aclose(self) -> None: ...
 
 
@@ -43,6 +45,9 @@ class LoggingWhatsAppClient:
 
     async def send_text(self, to: str, text: str) -> None:
         log.info("→ %s: %s", to, text)
+
+    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> None:
+        log.info("→ %s: [template %s] %s", to, name, params)
 
     async def aclose(self) -> None:
         return None
@@ -64,15 +69,40 @@ class CloudApiClient:
         self._client = client or httpx.AsyncClient(timeout=10.0)
 
     async def send_text(self, to: str, text: str) -> None:
-        response = await self._client.post(
-            self._url,
-            headers={"Authorization": f"Bearer {self._token}"},
-            json={
+        await self._post(
+            {
                 "messaging_product": "whatsapp",
                 "to": to,
                 "type": "text",
                 "text": {"body": text},
-            },
+            }
+        )
+
+    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> None:
+        """Send an approved template (the only way to reach a debtor outside 24h)."""
+        await self._post(
+            {
+                "messaging_product": "whatsapp",
+                "to": to,
+                "type": "template",
+                "template": {
+                    "name": name,
+                    "language": {"code": lang},
+                    "components": [
+                        {
+                            "type": "body",
+                            "parameters": [{"type": "text", "text": p} for p in params],
+                        }
+                    ],
+                },
+            }
+        )
+
+    async def _post(self, body: dict) -> None:
+        response = await self._client.post(
+            self._url,
+            headers={"Authorization": f"Bearer {self._token}"},
+            json=body,
         )
         response.raise_for_status()
 

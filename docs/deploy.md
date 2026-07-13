@@ -99,6 +99,31 @@ fly ssh console -C "python -m orviqo.worker --once"   # or, locally: make worker
 > 24h). Registering the template is a Meta-dashboard step; the digest text in
 > `reminder_service.py` maps to it.
 
+### Chasing debtors directly
+
+The worker's second pass (`ChaseService`) messages *debtors* who have a saved
+contact and an overdue debt. Because a debtor is virtually never inside the 24h
+window, this **requires its own approved template** — a debtor-facing one, e.g.:
+
+```
+Hi {{1}}, a friendly reminder that {{2}} for {{3}} was due {{4}}.
+Kindly arrange payment. Reply STOP to opt out.
+```
+
+Register it as a **Utility** template, then set its name (and language) as
+secrets — until `WHATSAPP_CHASE_TEMPLATE` is set, the chase pass is a safe no-op:
+
+```bash
+fly secrets set \
+  WHATSAPP_CHASE_TEMPLATE="orviqo_debt_reminder" \
+  WHATSAPP_TEMPLATE_LANG="en_US"
+```
+
+The four body variables are filled, in order, with the debtor's name, the amount
+(₦), the item, and the due date (see `_chase_params` in `chase_service.py`).
+Inbound routing honors STOP automatically: a known debtor's reply is handled by
+`DebtorInboxService` (opt-out or acknowledge) and never reaches owner intake.
+
 ## Notes & honest caveats
 
 - **Not verifiable from a laptop without Docker + a Fly account.** The app code

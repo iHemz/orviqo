@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str = ""
     whatsapp_api_version: str = "v21.0"
 
+    # Debtor-chasing: the Meta-approved template used to message a debtor outside
+    # the 24h window. Empty = chasing off (the worker skips it) until registered.
+    whatsapp_chase_template: str = ""
+    whatsapp_template_lang: str = "en_US"
+
     def require_anthropic_key(self) -> None:
         if not self.anthropic_api_key:
             raise ConfigError(

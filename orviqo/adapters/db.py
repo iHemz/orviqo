@@ -75,6 +75,15 @@ reminders = Table(
     Column("sent_at", DateTime(timezone=True), nullable=False),
 )
 
+# One row per chase sent to a debtor about an invoice — used to avoid re-spamming.
+chases = Table(
+    "chases",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("invoice_id", String, nullable=False, index=True),
+    Column("sent_at", DateTime(timezone=True), nullable=False),
+)
+
 # A debtor's contact + consent state, so the owner can have Orviqo chase them.
 # One row per (business, debtor name); `opted_out` is the STOP gate.
 debtors = Table(
