@@ -106,8 +106,10 @@ unset, the chase pass is a safe no-op. A debtor's reply is relayed to the owner
 (best-effort) so the chase is a two-way signal. Running balances ✅ — partial
 payments show cumulative progress ("₦70,000 of ₦80,000 paid, ₦10,000 still
 outstanding"), reconstructing the original from the outstanding amount plus the
-payments ledger, no schema change. Next: payment plans (expected instalments)
-and richer debtor conversations.
+payments ledger, no schema change. Inbound idempotency ✅ — redelivered webhooks
+are deduped by message id (`processed_messages`), marked only after a clean
+handle, so a retried "Chidi paid 50k" is never double-counted. Next: payment
+plans (expected instalments) and richer debtor conversations.
 
 ## Migrations
 

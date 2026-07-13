@@ -75,6 +75,14 @@ reminders = Table(
     Column("sent_at", DateTime(timezone=True), nullable=False),
 )
 
+# One row per inbound WhatsApp message id we've handled — inbound idempotency.
+processed_messages = Table(
+    "processed_messages",
+    metadata,
+    Column("message_id", String, primary_key=True),
+    Column("processed_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
 # One row per chase sent to a debtor about an invoice — used to avoid re-spamming.
 chases = Table(
     "chases",

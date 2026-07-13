@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, NamedTuple, Protocol
 
 import httpx
 
@@ -23,13 +23,26 @@ if TYPE_CHECKING:
 log = logging.getLogger("orviqo.whatsapp")
 
 
-def iter_text_messages(payload: dict) -> Iterator[tuple[str, str]]:
-    """Yield ``(sender, text)`` for each text message in a Cloud API webhook."""
+class InboundMessage(NamedTuple):
+    """One inbound text message. ``id`` is the WhatsApp ``wamid`` — used to dedup
+    redelivered webhooks so a message is never processed twice."""
+
+    sender: str
+    text: str
+    id: str
+
+
+def iter_text_messages(payload: dict) -> Iterator[InboundMessage]:
+    """Yield an ``InboundMessage`` for each text message in a Cloud API webhook."""
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             for msg in change.get("value", {}).get("messages", []):
                 if msg.get("type") == "text":
-                    yield msg.get("from", ""), msg["text"]["body"]
+                    yield InboundMessage(
+                        sender=msg.get("from", ""),
+                        text=msg["text"]["body"],
+                        id=msg.get("id", ""),
+                    )
 
 
 class WhatsAppClient(Protocol):

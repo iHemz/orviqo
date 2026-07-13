@@ -15,10 +15,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, Request, Response
 
 from orviqo.adapters.db import make_engine
+from orviqo.adapters.processed import ProcessedMessageStore
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
+from orviqo.adapters.sql_processed import SqlAlchemyProcessedMessageStore
 from orviqo.adapters.whatsapp import (
     WhatsAppClient,
     iter_text_messages,
@@ -46,6 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         confidence_threshold=settings.intake_confidence_threshold,
     )
     app.state.inbox = DebtorInboxService(debtor_store, whatsapp)
+    app.state.processed = SqlAlchemyProcessedMessageStore(engine)
     app.state.whatsapp = whatsapp
     try:
         yield
@@ -77,16 +80,22 @@ def create_app() -> FastAPI:
     async def inbound(request: Request) -> dict:
         service: IntakeService = request.app.state.service
         inbox: DebtorInboxService = request.app.state.inbox
+        processed: ProcessedMessageStore = request.app.state.processed
         whatsapp: WhatsAppClient = request.app.state.whatsapp
         payload = await request.json()
-        for sender, text in iter_text_messages(payload):
+        for msg in iter_text_messages(payload):
+            if await processed.seen(msg.id):
+                continue  # redelivered webhook — already handled
             # A known debtor's reply (e.g. STOP) is handled here, not as owner intake.
-            debtor_reply = await inbox.handle_if_debtor(sender, text)
+            debtor_reply = await inbox.handle_if_debtor(msg.sender, msg.text)
             if debtor_reply is not None:
-                await whatsapp.send_text(sender, debtor_reply)
-                continue
-            reply = await service.handle_message(sender, text)
-            await whatsapp.send_text(sender, reply.text)
+                await whatsapp.send_text(msg.sender, debtor_reply)
+            else:
+                reply = await service.handle_message(msg.sender, msg.text)
+                await whatsapp.send_text(msg.sender, reply.text)
+            # Mark only after a clean handle: a failure above leaves it unmarked so
+            # WhatsApp's retry reprocesses it, rather than dropping the message.
+            await processed.mark(msg.id)
         return {"status": "ok"}
 
     return app
