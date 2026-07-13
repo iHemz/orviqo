@@ -192,6 +192,39 @@ async def test_payment_tolerates_hash_prefixed_invoice_id(make_agent) -> None:
     assert await ledger.open_invoices("b") == []
 
 
+async def test_ambiguous_debtor_payment_asks_which(make_agent) -> None:
+    # Two open debts for the same debtor: never guess which one the money clears.
+    ledger, audit, payments = InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore()
+    for item in ("rice", "generator"):
+        await ledger.add(
+            ParsedInvoice(debtor_name="Chidi", amount_ngn=50_000, item=item, confidence=1.0), "b"
+        )
+    action = IntakeAction(kind="payment", debtor_name="Chidi", amount_ngn=50_000, confidence=0.95)
+    service = IntakeService(make_agent(action), ledger, audit, payments)
+
+    reply = await service.handle_message("b", "Chidi paid 50k")
+
+    assert "which one" in reply.text.lower()
+    assert "rice" in reply.text and "generator" in reply.text
+    assert await payments.for_invoice("") == []  # nothing recorded
+    assert len(await ledger.open_invoices("b")) == 2  # both untouched
+    assert (await audit.entries("b"))[0].decision is Decision.asked
+
+
+async def test_overpayment_settles_and_flags_the_excess(make_agent) -> None:
+    ledger, audit, payments = InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore()
+    inv = await ledger.add(ParsedInvoice(debtor_name="Ada", amount_ngn=40_000, confidence=1.0), "b")
+    action = IntakeAction(kind="payment", invoice_id=inv.id, amount_ngn=50_000, confidence=0.95)
+    service = IntakeService(make_agent(action), ledger, audit, payments)
+
+    reply = await service.handle_message("b", "Ada paid 50k")
+
+    assert "overpaid" in reply.text.lower()
+    assert "10,000" in reply.text
+    assert await ledger.open_invoices("b") == []  # still settled
+    assert (await payments.for_invoice(inv.id))[0].amount_ngn == 50_000  # actual amount kept
+
+
 async def test_payment_without_amount_asks(make_agent) -> None:
     ledger, audit, payments = InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore()
     inv = await ledger.add(ParsedInvoice(debtor_name="Ada", amount_ngn=40_000, confidence=1.0), "b")

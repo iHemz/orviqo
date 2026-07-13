@@ -68,16 +68,19 @@ def _find(open_invoices: list[Invoice], invoice_id: str | None) -> Invoice | Non
     return next((i for i in open_invoices if i.id == ref), None)
 
 
-def _resolve_target(action: IntakeAction, open_invoices: list[Invoice]) -> Invoice | None:
-    """Find the invoice a payment refers to: by id, else a unique debtor match."""
+def _payment_candidates(action: IntakeAction, open_invoices: list[Invoice]) -> list[Invoice]:
+    """Open invoices a payment could settle: an exact id, else every debtor match.
+
+    Returning *all* debtor matches (not just a unique one) lets the caller tell
+    "unknown" apart from "ambiguous" and ask which invoice — we never guess with money.
+    """
     by_id = _find(open_invoices, action.invoice_id)
     if by_id is not None:
-        return by_id
+        return [by_id]
     if action.debtor_name:
-        matches = [i for i in open_invoices if i.debtor_name.lower() == action.debtor_name.lower()]
-        if len(matches) == 1:
-            return matches[0]
-    return None
+        name = action.debtor_name.lower()
+        return [i for i in open_invoices if i.debtor_name.lower() == name]
+    return []
 
 
 class IntakeService:
@@ -113,9 +116,13 @@ class IntakeService:
     async def _apply_payment(
         self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
     ) -> Reply:
-        target = _resolve_target(action, open_invoices)
-        if target is None:
+        candidates = _payment_candidates(action, open_invoices)
+        if not candidates:
             return await self._ask(business_id, text, action)
+        if len(candidates) > 1:
+            # Ambiguous — the debtor has several open debts. Ask which, never guess.
+            return await self._ask_which(business_id, text, action, candidates)
+        target = candidates[0]
 
         if action.paid_in_full:
             paid = target.amount_ngn or 0
@@ -136,7 +143,13 @@ class IntakeService:
         owed = target.amount_ngn or 0
         if paid >= owed:
             await self._ledger.update(target.model_copy(update={"status": InvoiceStatus.paid}))
-            text_out = f"Settled: {target.debtor_name} — ₦{owed:,} fully paid. [#{target.id}]"
+            if paid > owed:
+                text_out = (
+                    f"Settled: {target.debtor_name} — ₦{owed:,} paid, "
+                    f"₦{paid - owed:,} overpaid. [#{target.id}]"
+                )
+            else:
+                text_out = f"Settled: {target.debtor_name} — ₦{owed:,} fully paid. [#{target.id}]"
         else:
             await self._ledger.update(target.model_copy(update={"amount_ngn": owed - paid}))
             text_out = (
@@ -191,6 +204,16 @@ class IntakeService:
 
     async def _ask(self, business_id: str, text: str, action: IntakeAction) -> Reply:
         reply = Reply(text=action.clarify or _FALLBACK_ASK)
+        await self._record(business_id, text, Decision.asked, action, reply.text, None)
+        return reply
+
+    async def _ask_which(
+        self, business_id: str, text: str, action: IntakeAction, candidates: list[Invoice]
+    ) -> Reply:
+        who = action.debtor_name or "That debtor"
+        lines = "\n".join(f"- {_summary(i)}" for i in candidates)
+        question = f"{who} has {len(candidates)} open debts — which one?\n{lines}"
+        reply = Reply(text=question)
         await self._record(business_id, text, Decision.asked, action, reply.text, None)
         return reply
 
