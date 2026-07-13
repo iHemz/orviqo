@@ -13,10 +13,11 @@ from pydantic import BaseModel
 
 from orviqo.adapters.audit import AuditLog
 from orviqo.adapters.ledger import LedgerStore
+from orviqo.adapters.payments import PaymentStore
 from orviqo.agents.base import IntakeAgent
 from orviqo.domain.audit import AuditEntry, Decision
 from orviqo.domain.intake import IntakeAction, Turn
-from orviqo.domain.models import Invoice, ParsedInvoice
+from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
 
 _HISTORY_TURNS = 6
 _FALLBACK_ASK = "Sorry, I didn't fully get that — who owes you, how much, and by when?"
@@ -59,17 +60,39 @@ def _changed_fields(action: IntakeAction) -> dict:
     return {f: getattr(action, f) for f in fields if getattr(action, f) is not None}
 
 
+def _find(open_invoices: list[Invoice], invoice_id: str | None) -> Invoice | None:
+    """Match an invoice by id, tolerating the '#' the agent copies from context."""
+    if not invoice_id:
+        return None
+    ref = invoice_id.lstrip("#")
+    return next((i for i in open_invoices if i.id == ref), None)
+
+
+def _resolve_target(action: IntakeAction, open_invoices: list[Invoice]) -> Invoice | None:
+    """Find the invoice a payment refers to: by id, else a unique debtor match."""
+    by_id = _find(open_invoices, action.invoice_id)
+    if by_id is not None:
+        return by_id
+    if action.debtor_name:
+        matches = [i for i in open_invoices if i.debtor_name.lower() == action.debtor_name.lower()]
+        if len(matches) == 1:
+            return matches[0]
+    return None
+
+
 class IntakeService:
     def __init__(
         self,
         agent: IntakeAgent,
         ledger: LedgerStore,
         audit: AuditLog,
+        payments: PaymentStore,
         confidence_threshold: float = 0.5,
     ) -> None:
         self._agent = agent
         self._ledger = ledger
         self._audit = audit
+        self._payments = payments
         self._threshold = confidence_threshold
 
     async def handle_message(self, business_id: str, text: str) -> Reply:
@@ -79,11 +102,50 @@ class IntakeService:
 
         if action.kind == "query":
             return await self._answer(business_id, text, action, open_invoices)
+        if action.kind == "payment":
+            return await self._apply_payment(business_id, text, action, open_invoices)
         if action.kind == "update":
             return await self._apply_update(business_id, text, action, open_invoices)
         if action.kind == "create" and self._can_record(action):
             return await self._apply_create(business_id, text, action)
         return await self._ask(business_id, text, action)
+
+    async def _apply_payment(
+        self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
+    ) -> Reply:
+        target = _resolve_target(action, open_invoices)
+        if target is None:
+            return await self._ask(business_id, text, action)
+
+        if action.paid_in_full:
+            paid = target.amount_ngn or 0
+        elif action.amount_ngn is not None:
+            paid = action.amount_ngn
+        else:
+            # Payment with no amount and not marked "in full" — ask, offering the total.
+            owed = target.amount_ngn or 0
+            question = (
+                f"How much did {target.debtor_name} pay — the amount, "
+                f"or say 'in full' (₦{owed:,})?"
+            )
+            reply = Reply(text=question)
+            await self._record(business_id, text, Decision.asked, action, reply.text, None)
+            return reply
+
+        await self._payments.record(target.id, business_id, paid)
+        owed = target.amount_ngn or 0
+        if paid >= owed:
+            await self._ledger.update(target.model_copy(update={"status": InvoiceStatus.paid}))
+            text_out = f"Settled: {target.debtor_name} — ₦{owed:,} fully paid. [#{target.id}]"
+        else:
+            await self._ledger.update(target.model_copy(update={"amount_ngn": owed - paid}))
+            text_out = (
+                f"Recorded ₦{paid:,} from {target.debtor_name}. "
+                f"₦{owed - paid:,} still outstanding. [#{target.id}]"
+            )
+        reply = Reply(text=text_out, recorded_invoice_id=target.id)
+        await self._record(business_id, text, Decision.reconciled, action, reply.text, target.id)
+        return reply
 
     async def _answer(
         self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
@@ -116,7 +178,7 @@ class IntakeService:
     async def _apply_update(
         self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
     ) -> Reply:
-        target = next((inv for inv in open_invoices if inv.id == action.invoice_id), None)
+        target = _find(open_invoices, action.invoice_id)
         if target is None:
             # Boundary guard: the agent pointed at an invoice that isn't open — ask.
             return await self._ask(business_id, text, action)

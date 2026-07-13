@@ -95,8 +95,10 @@ The week-by-week plan lives in the
 Week 2 ✅: durable ledger · audit log · Alembic migrations · WhatsApp Cloud API
 client. Conversational intake ✅ (create/update/query/clarify). Reminder engine ✅
 — `ReminderService` + a scheduled `worker` process (2nd Fly process) send owners
-a daily overdue digest, on the same ports. Next: reconciliation (match payments
-to invoices), and chasing the *debtor* (needs debtor contacts + WhatsApp opt-in).
+a daily overdue digest, on the same ports. Reconciliation ✅ — a `payment` intent
+settles or reduces an invoice from plain messages ("Chidi paid 50k", "Randi
+cleared her debt"), writing each payment to a durable `payments` ledger. Next:
+chasing the *debtor* directly (needs debtor contacts + WhatsApp opt-in).
 
 ## Migrations
 

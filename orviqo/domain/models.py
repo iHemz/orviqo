@@ -8,7 +8,7 @@ number to the ledger.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -50,3 +50,12 @@ class Invoice(ParsedInvoice):
     id: str
     business_id: str
     status: InvoiceStatus = InvoiceStatus.open
+
+
+class Payment(BaseModel):
+    """A payment the owner reported receiving against an invoice."""
+
+    invoice_id: str
+    business_id: str
+    amount_ngn: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

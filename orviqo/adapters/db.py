@@ -54,6 +54,17 @@ audit_log = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+# One row per payment the owner reports against an invoice (spec §8).
+payments = Table(
+    "payments",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("invoice_id", String, nullable=False, index=True),
+    Column("business_id", String, nullable=False, index=True),
+    Column("amount_ngn", Integer, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
 # One row per reminder digest sent to a business owner — used to avoid re-spamming.
 reminders = Table(
     "reminders",

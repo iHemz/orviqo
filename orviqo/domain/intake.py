@@ -23,9 +23,12 @@ class Turn(BaseModel):
 class IntakeAction(BaseModel):
     """The agent's decision for one inbound message, given the context."""
 
-    kind: Literal["create", "update", "query", "clarify"]
+    kind: Literal["create", "update", "query", "payment", "clarify"]
     invoice_id: str | None = Field(
-        default=None, description="Which open invoice to update (only for kind='update')."
+        default=None, description="Which open invoice to update/settle (update, payment)."
+    )
+    paid_in_full: bool = Field(
+        default=False, description="True when the owner says a debt was paid/cleared in full."
     )
     debtor_name: str | None = None
     amount_ngn: int | None = None

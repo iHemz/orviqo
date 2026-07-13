@@ -17,6 +17,7 @@ from fastapi import FastAPI, Query, Request, Response
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
+from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
 from orviqo.adapters.whatsapp import (
     WhatsAppClient,
     iter_text_messages,
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         agent=PydanticAIIntakeAgent(),
         ledger=SqlAlchemyLedger(engine),
         audit=SqlAlchemyAuditLog(engine),
+        payments=SqlAlchemyPaymentStore(engine),
         confidence_threshold=settings.intake_confidence_threshold,
     )
     whatsapp = make_whatsapp_client(settings)

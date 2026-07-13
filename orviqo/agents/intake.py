@@ -32,6 +32,11 @@ Choose exactly one `kind`:
   does X owe?", "how much does X owe me?", "who owes me?", "list my debts"). Set
   `debtor_name` if they ask about a specific person, otherwise leave it null. Do
   not fill amount/item/due — the answer comes from the ledger, not from you.
+- "payment": the owner says a debtor PAID them, fully or partly ("Chidi paid
+  50k", "Randi cleared her debt", "Ada settled in full"). Set `invoice_id` to the
+  matching open invoice and `debtor_name`. For a specific amount, set `amount_ngn`
+  to the amount PAID. For "in full" / "cleared" / "settled" with no number, set
+  `paid_in_full: true` and leave amount_ngn null — do NOT copy the amount yourself.
 - "clarify": you genuinely cannot tell what to record and cannot resolve it from
   the open invoices or recent conversation. Ask ONE short question.
 
