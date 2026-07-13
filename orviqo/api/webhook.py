@@ -17,7 +17,11 @@ from fastapi import FastAPI, Query, Request, Response
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
-from orviqo.adapters.whatsapp import LoggingWhatsAppClient, iter_text_messages
+from orviqo.adapters.whatsapp import (
+    WhatsAppClient,
+    iter_text_messages,
+    make_whatsapp_client,
+)
 from orviqo.agents.intake import PydanticAIIntakeParser
 from orviqo.config import bootstrap, settings
 from orviqo.services.intake_service import IntakeService
@@ -34,10 +38,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         audit=SqlAlchemyAuditLog(engine),
         confidence_threshold=settings.intake_confidence_threshold,
     )
-    app.state.whatsapp = LoggingWhatsAppClient()
+    whatsapp = make_whatsapp_client(settings)
+    app.state.whatsapp = whatsapp
     try:
         yield
     finally:
+        await whatsapp.aclose()
         await engine.dispose()
 
 
@@ -58,7 +64,7 @@ def create_app() -> FastAPI:
     @app.post("/webhook")
     async def inbound(request: Request) -> dict:
         service: IntakeService = request.app.state.service
-        whatsapp: LoggingWhatsAppClient = request.app.state.whatsapp
+        whatsapp: WhatsAppClient = request.app.state.whatsapp
         payload = await request.json()
         for sender, text in iter_text_messages(payload):
             reply = await service.handle_message(sender, text)

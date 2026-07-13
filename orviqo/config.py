@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = ""
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""
+    whatsapp_api_version: str = "v21.0"
 
     def require_anthropic_key(self) -> None:
         if not self.anthropic_api_key:

@@ -75,4 +75,9 @@ schema from the model metadata directly.
   proof that Orviqo never invents a number.
 - **Migrations ✅** — Alembic manages the schema (`migrations/`); the app no
   longer auto-creates tables at startup. `uv run alembic upgrade head` to apply.
-- Next: real WhatsApp Cloud API client (`WhatsAppClient`).
+- **WhatsApp send ✅** — `CloudApiClient` (Meta Graph API) behind the
+  `WhatsAppClient` port; used automatically when credentials are set, else the
+  logging stub. The full inbound→parse→gate→reply loop is closed.
+
+Week 2 done. Next: connect the live webhook (public URL + verify token), then
+Week 3 (reminders, reconciliation).

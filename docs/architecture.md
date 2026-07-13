@@ -83,8 +83,9 @@ lets the tests import freely.
 
 The week-by-week plan lives in the
 [spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md).
-Week 2 (in progress): durable ledger ✅ · audit log ✅ · Alembic migrations ✅ ·
-next up the real WhatsApp Cloud API client.
+Week 2 ✅: durable ledger · audit log · Alembic migrations · WhatsApp Cloud API
+client. The inbound→parse→gate→reply loop is closed end to end. Next: Week 3
+(reminders, reconciliation) on the same ports.
 
 ## Migrations
 
