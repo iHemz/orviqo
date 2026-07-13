@@ -19,6 +19,7 @@ class Decision(StrEnum):
     updated = "updated"
     reconciled = "reconciled"
     answered = "answered"
+    noted = "noted"  # saved a fact that isn't an invoice write (e.g. a debtor's contact)
     asked = "asked"
 
 

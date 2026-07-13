@@ -12,6 +12,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from orviqo.adapters.audit import AuditLog
+from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.payments import PaymentStore
 from orviqo.agents.base import IntakeAgent
@@ -90,12 +91,14 @@ class IntakeService:
         ledger: LedgerStore,
         audit: AuditLog,
         payments: PaymentStore,
+        debtors: DebtorStore,
         confidence_threshold: float = 0.5,
     ) -> None:
         self._agent = agent
         self._ledger = ledger
         self._audit = audit
         self._payments = payments
+        self._debtors = debtors
         self._threshold = confidence_threshold
 
     async def handle_message(self, business_id: str, text: str) -> Reply:
@@ -107,6 +110,8 @@ class IntakeService:
             return await self._answer(business_id, text, action, open_invoices)
         if action.kind == "payment":
             return await self._apply_payment(business_id, text, action, open_invoices)
+        if action.kind == "contact":
+            return await self._apply_contact(business_id, text, action)
         if action.kind == "update":
             return await self._apply_update(business_id, text, action, open_invoices)
         if action.kind == "create" and self._can_record(action):
@@ -166,6 +171,24 @@ class IntakeService:
         answer = _answer_query(open_invoices, action.debtor_name)
         await self._record(business_id, text, Decision.answered, action, answer, None)
         return Reply(text=answer)
+
+    async def _apply_contact(self, business_id: str, text: str, action: IntakeAction) -> Reply:
+        # Need both a name and a number to chase anyone — otherwise ask for the gap.
+        if not action.debtor_name or not action.phone:
+            who = action.debtor_name or "them"
+            reply = Reply(text=action.clarify or f"What number should I use to reach {who}?")
+            await self._record(business_id, text, Decision.asked, action, reply.text, None)
+            return reply
+
+        debtor = await self._debtors.upsert(business_id, action.debtor_name, action.phone)
+        reply = Reply(
+            text=(
+                f"Saved {debtor.name}'s number ({debtor.phone}). "
+                "I'll chase them directly when a debt runs overdue."
+            )
+        )
+        await self._record(business_id, text, Decision.noted, action, reply.text, None)
+        return reply
 
     def _can_record(self, action: IntakeAction) -> bool:
         # The rigor gate: never create without a debtor, an amount, and confidence.

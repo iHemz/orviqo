@@ -14,6 +14,7 @@ import argparse
 import asyncio
 
 from orviqo.adapters.audit import InMemoryAuditLog
+from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.ledger import InMemoryLedger
 from orviqo.adapters.payments import InMemoryPaymentStore
 from orviqo.agents.intake import PydanticAIIntakeAgent
@@ -34,6 +35,7 @@ async def _run(messages: list[str]) -> None:
         ledger=InMemoryLedger(),
         audit=InMemoryAuditLog(),
         payments=InMemoryPaymentStore(),
+        debtors=InMemoryDebtorStore(),
         confidence_threshold=settings.intake_confidence_threshold,
     )
     for msg in messages:

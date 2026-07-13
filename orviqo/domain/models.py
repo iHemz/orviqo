@@ -59,3 +59,17 @@ class Payment(BaseModel):
     business_id: str
     amount_ngn: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class Debtor(BaseModel):
+    """A debtor the owner may chase directly: their contact and consent state.
+
+    ``opted_out`` is the consent gate — once a debtor replies STOP we never
+    message them again, regardless of how many debts they run up.
+    """
+
+    business_id: str
+    name: str
+    phone: str
+    opted_out: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

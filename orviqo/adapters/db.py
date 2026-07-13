@@ -10,6 +10,7 @@ The same schema runs on Postgres (prod, ``postgresql+asyncpg://``) and SQLite
 from __future__ import annotations
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -72,6 +73,19 @@ reminders = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("business_id", String, nullable=False, index=True),
     Column("sent_at", DateTime(timezone=True), nullable=False),
+)
+
+# A debtor's contact + consent state, so the owner can have Orviqo chase them.
+# One row per (business, debtor name); `opted_out` is the STOP gate.
+debtors = Table(
+    "debtors",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("business_id", String, nullable=False, index=True),
+    Column("name", String, nullable=False),
+    Column("phone", String, nullable=False),
+    Column("opted_out", Boolean, nullable=False, default=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 
 

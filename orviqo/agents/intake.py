@@ -37,6 +37,10 @@ Choose exactly one `kind`:
   matching open invoice and `debtor_name`. For a specific amount, set `amount_ngn`
   to the amount PAID. For "in full" / "cleared" / "settled" with no number, set
   `paid_in_full: true` and leave amount_ngn null — do NOT copy the amount yourself.
+- "contact": the owner is giving a debtor's phone number so Orviqo can chase them
+  ("Chidi's number is 0803...", "reach Ada on +234 807...", "Tunde — 08123456789").
+  Set `debtor_name` and put the number in `phone` exactly as given. This is NOT a
+  new debt — do not set amount_ngn.
 - "clarify": you genuinely cannot tell what to record and cannot resolve it from
   the open invoices or recent conversation. Ask ONE short question.
 

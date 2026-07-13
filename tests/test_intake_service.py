@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date
 
 from orviqo.adapters.audit import InMemoryAuditLog
+from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.ledger import InMemoryLedger
 from orviqo.adapters.payments import InMemoryPaymentStore
 from orviqo.domain.audit import Decision
@@ -24,7 +25,9 @@ async def test_create_records_and_audits(make_agent) -> None:
         due_date=date(2026, 7, 17), confidence=0.98,
     )
     ledger, audit = InMemoryLedger(), InMemoryAuditLog()
-    service = IntakeService(make_agent(action), ledger, audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("biz1", "Chidi owes 150k for generator, due Friday")
 
@@ -40,7 +43,9 @@ async def test_update_modifies_existing_invoice(make_agent) -> None:
         ParsedInvoice(debtor_name="Randi", amount_ngn=250_000, confidence=0.98), "biz1"
     )
     action = IntakeAction(kind="update", invoice_id=existing.id, item="generator", confidence=0.95)
-    service = IntakeService(make_agent(action), ledger, audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("biz1", "the debt is for a generator")
 
@@ -54,7 +59,9 @@ async def test_update_modifies_existing_invoice(make_agent) -> None:
 async def test_clarify_asks_and_records_nothing(make_agent) -> None:
     action = IntakeAction(kind="clarify", clarify="Who owes you, and how much?", confidence=0.3)
     ledger, audit = InMemoryLedger(), InMemoryAuditLog()
-    service = IntakeService(make_agent(action), ledger, audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("biz1", "someone owes me")
 
@@ -68,7 +75,9 @@ async def test_create_without_amount_is_refused(make_agent) -> None:
     # Rigor gate: a "create" with no amount must fall back to asking, never record.
     action = IntakeAction(kind="create", debtor_name="Tunde", amount_ngn=None, confidence=0.95)
     ledger, audit = InMemoryLedger(), InMemoryAuditLog()
-    service = IntakeService(make_agent(action), ledger, audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("biz1", "Tunde owes me")
 
@@ -80,7 +89,9 @@ async def test_create_without_amount_is_refused(make_agent) -> None:
 async def test_update_to_unknown_invoice_falls_back_to_ask(make_agent) -> None:
     action = IntakeAction(kind="update", invoice_id="nonexistent", item="x", confidence=0.9)
     ledger, audit = InMemoryLedger(), InMemoryAuditLog()
-    service = IntakeService(make_agent(action), ledger, audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("biz1", "for the generator")
 
@@ -95,7 +106,9 @@ async def test_query_answers_a_specific_debtor_from_the_ledger(make_agent) -> No
         "biz1",
     )
     action = IntakeAction(kind="query", debtor_name="Randi", confidence=0.9)
-    service = IntakeService(make_agent(action), ledger, audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("biz1", "what does Randi owe?")
 
@@ -109,7 +122,9 @@ async def test_query_all_lists_open_debts(make_agent) -> None:
     await ledger.add(ParsedInvoice(debtor_name="Randi", amount_ngn=300_000, confidence=0.98), "b")
     await ledger.add(ParsedInvoice(debtor_name="Chidi", amount_ngn=150_000, confidence=0.98), "b")
     action = IntakeAction(kind="query", confidence=0.9)
-    service = IntakeService(make_agent(action), ledger, audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("b", "who owes me?")
 
@@ -119,7 +134,11 @@ async def test_query_all_lists_open_debts(make_agent) -> None:
 async def test_query_unknown_debtor_says_so(make_agent) -> None:
     action = IntakeAction(kind="query", debtor_name="Ghost", confidence=0.9)
     service = IntakeService(
-        make_agent(action), InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore()
+        make_agent(action),
+        InMemoryLedger(),
+        InMemoryAuditLog(),
+        InMemoryPaymentStore(),
+        InMemoryDebtorStore(),
     )
 
     reply = await service.handle_message("biz1", "does Ghost owe me?")
@@ -134,7 +153,9 @@ async def test_agent_receives_open_invoices_and_history_as_context(make_agent) -
         kind="create", debtor_name="Randi", amount_ngn=250_000, confidence=0.98
     )
     agent = make_agent(action)
-    service = IntakeService(agent, InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore())
+    service = IntakeService(
+        agent, InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     await service.handle_message("biz1", "Randi owes 250k, due Friday")
     await service.handle_message("biz1", "the debt is for a generator")
@@ -149,7 +170,7 @@ async def test_full_payment_settles_the_invoice(make_agent) -> None:
         ParsedInvoice(debtor_name="Randi", amount_ngn=250_000, confidence=1.0), "b"
     )
     action = IntakeAction(kind="payment", invoice_id=inv.id, paid_in_full=True, confidence=0.95)
-    service = IntakeService(make_agent(action), ledger, audit, payments)
+    service = IntakeService(make_agent(action), ledger, audit, payments, InMemoryDebtorStore())
 
     reply = await service.handle_message("b", "Randi cleared her debt")
 
@@ -165,7 +186,7 @@ async def test_partial_payment_reduces_outstanding(make_agent) -> None:
         ParsedInvoice(debtor_name="Chidi", amount_ngn=80_000, confidence=1.0), "b"
     )
     action = IntakeAction(kind="payment", invoice_id=inv.id, amount_ngn=50_000, confidence=0.95)
-    service = IntakeService(make_agent(action), ledger, audit, payments)
+    service = IntakeService(make_agent(action), ledger, audit, payments, InMemoryDebtorStore())
 
     reply = await service.handle_message("b", "Chidi paid 50k")
 
@@ -184,7 +205,7 @@ async def test_payment_tolerates_hash_prefixed_invoice_id(make_agent) -> None:
     action = IntakeAction(
         kind="payment", invoice_id=f"#{inv.id}", paid_in_full=True, confidence=0.95
     )
-    service = IntakeService(make_agent(action), ledger, audit, payments)
+    service = IntakeService(make_agent(action), ledger, audit, payments, InMemoryDebtorStore())
 
     reply = await service.handle_message("b", "Randi paid in full")
 
@@ -200,7 +221,7 @@ async def test_ambiguous_debtor_payment_asks_which(make_agent) -> None:
             ParsedInvoice(debtor_name="Chidi", amount_ngn=50_000, item=item, confidence=1.0), "b"
         )
     action = IntakeAction(kind="payment", debtor_name="Chidi", amount_ngn=50_000, confidence=0.95)
-    service = IntakeService(make_agent(action), ledger, audit, payments)
+    service = IntakeService(make_agent(action), ledger, audit, payments, InMemoryDebtorStore())
 
     reply = await service.handle_message("b", "Chidi paid 50k")
 
@@ -215,7 +236,7 @@ async def test_overpayment_settles_and_flags_the_excess(make_agent) -> None:
     ledger, audit, payments = InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore()
     inv = await ledger.add(ParsedInvoice(debtor_name="Ada", amount_ngn=40_000, confidence=1.0), "b")
     action = IntakeAction(kind="payment", invoice_id=inv.id, amount_ngn=50_000, confidence=0.95)
-    service = IntakeService(make_agent(action), ledger, audit, payments)
+    service = IntakeService(make_agent(action), ledger, audit, payments, InMemoryDebtorStore())
 
     reply = await service.handle_message("b", "Ada paid 50k")
 
@@ -229,7 +250,7 @@ async def test_payment_without_amount_asks(make_agent) -> None:
     ledger, audit, payments = InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore()
     inv = await ledger.add(ParsedInvoice(debtor_name="Ada", amount_ngn=40_000, confidence=1.0), "b")
     action = IntakeAction(kind="payment", invoice_id=inv.id, confidence=0.9)
-    service = IntakeService(make_agent(action), ledger, audit, payments)
+    service = IntakeService(make_agent(action), ledger, audit, payments, InMemoryDebtorStore())
 
     reply = await service.handle_message("b", "Ada paid")
 
@@ -240,9 +261,42 @@ async def test_payment_without_amount_asks(make_agent) -> None:
 async def test_payment_for_unknown_debtor_asks(make_agent) -> None:
     audit = InMemoryAuditLog()
     action = IntakeAction(kind="payment", debtor_name="Ghost", amount_ngn=10_000, confidence=0.9)
-    service = IntakeService(make_agent(action), InMemoryLedger(), audit, InMemoryPaymentStore())
+    service = IntakeService(
+        make_agent(action), InMemoryLedger(), audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
 
     reply = await service.handle_message("b", "Ghost paid 10k")
 
     assert reply.recorded_invoice_id is None
+    assert (await audit.entries("b"))[0].decision is Decision.asked
+
+
+async def test_contact_saves_the_debtors_number(make_agent) -> None:
+    debtors, audit = InMemoryDebtorStore(), InMemoryAuditLog()
+    action = IntakeAction(
+        kind="contact", debtor_name="Chidi", phone="08031234567", confidence=0.95
+    )
+    service = IntakeService(
+        make_agent(action), InMemoryLedger(), audit, InMemoryPaymentStore(), debtors
+    )
+
+    reply = await service.handle_message("b", "Chidi's number is 08031234567")
+
+    assert "08031234567" in reply.text
+    saved = await debtors.find("b", "chidi")  # case-insensitive lookup
+    assert saved is not None and saved.phone == "08031234567"
+    assert (await audit.entries("b"))[0].decision is Decision.noted
+
+
+async def test_contact_without_a_number_asks(make_agent) -> None:
+    debtors, audit = InMemoryDebtorStore(), InMemoryAuditLog()
+    action = IntakeAction(kind="contact", debtor_name="Chidi", confidence=0.9)
+    service = IntakeService(
+        make_agent(action), InMemoryLedger(), audit, InMemoryPaymentStore(), debtors
+    )
+
+    reply = await service.handle_message("b", "save Chidi's contact")
+
+    assert "number" in reply.text.lower()
+    assert await debtors.find("b", "Chidi") is None  # nothing saved without a phone
     assert (await audit.entries("b"))[0].decision is Decision.asked
