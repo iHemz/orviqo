@@ -92,5 +92,9 @@ unpublished) add your own number as a tester. Send a WhatsApp to the test number
   the cost of a few seconds' cold start on the first message after a lull.
 - **Temporary WhatsApp token:** the Meta dashboard's initial access token expires
   (~24h). Swap in a permanent token before any real pilot.
-- **Region:** `primary_region = "jnb"` (Johannesburg) is the closest to Nigeria.
-  Keep the Postgres in the same region to minimise app↔DB latency.
+- **Region:** `primary_region = "fra"` (Frankfurt), co-located with a Neon
+  Postgres in EU Central. Counter-intuitive for a Nigerian product, but correct:
+  the SMB never talks to the app directly (they go through WhatsApp), so what
+  matters is app↔DB (every request) and app↔Anthropic (the parse) — both are
+  faster from Frankfurt than Johannesburg, and Neon has no Africa region. Put the
+  DB and the app in the **same region**.
