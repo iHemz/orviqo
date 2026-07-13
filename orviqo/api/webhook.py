@@ -50,6 +50,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="Orviqo — receivables agent", lifespan=lifespan)
 
+    @app.get("/health")
+    def health() -> dict:
+        """Liveness check for the platform load balancer (Fly)."""
+        return {"status": "ok"}
+
     @app.get("/webhook")
     def verify(
         mode: str = Query("", alias="hub.mode"),

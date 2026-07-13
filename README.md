@@ -81,3 +81,10 @@ schema from the model metadata directly.
 
 Week 2 done. Next: connect the live webhook (public URL + verify token), then
 Week 3 (reminders, reconciliation).
+
+## Deploy
+
+Runs as a persistent container on Fly.io (`Dockerfile` + `fly.toml`). Full
+walkthrough — Postgres, secrets, migrations, Meta webhook — in
+[`docs/deploy.md`](docs/deploy.md). A frontend/dashboard, when it exists, goes on
+Vercel and talks to this API.

@@ -1,0 +1,28 @@
+# Fly.io config. `app` must be globally unique — `fly launch` will set/adjust it.
+app = "orviqo"
+primary_region = "jnb"  # Johannesburg — closest region to Nigeria
+
+[deploy]
+  # Runs in a one-off machine before the new version goes live. Needs the
+  # DATABASE_URL secret (Fly injects it). Keeps the schema in lockstep with deploys.
+  release_command = "alembic upgrade head"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = "stop"
+  # Keep one machine warm so an inbound WhatsApp webhook never eats a cold start.
+  # Drop to 0 to cut cost while idle (accepts a few seconds of cold-start latency).
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
