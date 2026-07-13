@@ -1,5 +1,5 @@
 # Common developer tasks. On Windows without `make`, run the commands directly.
-.PHONY: dev lint format typecheck test migrate revision run try check
+.PHONY: dev lint format typecheck test simulate migrate revision run try check
 
 dev:            ## Sync the venv from uv.lock (deps + dev tools)
 	uv sync
@@ -15,6 +15,9 @@ typecheck:      ## Type-check the package
 
 test:           ## Run the offline test suite
 	uv run pytest -q
+
+simulate:       ## Simulate an inbound WhatsApp message. msg="..." [url=...]
+	uv run python tools/simulate_inbound.py "$(msg)" --url "$(or $(url),http://localhost:8000/webhook)"
 
 migrate:        ## Apply database migrations
 	uv run alembic upgrade head
