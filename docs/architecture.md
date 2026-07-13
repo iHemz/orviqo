@@ -103,8 +103,11 @@ number, `ChaseService` (2nd worker pass) messages debtors with overdue debts via
 an approved template, and inbound routing honors STOP (opt-out) before owner
 intake ever sees the message. Chasing is gated on `WHATSAPP_CHASE_TEMPLATE`;
 unset, the chase pass is a safe no-op. A debtor's reply is relayed to the owner
-(best-effort) so the chase is a two-way signal. Next: partial-payment
-intelligence (payment plans / running balances) and richer debtor conversations.
+(best-effort) so the chase is a two-way signal. Running balances ✅ — partial
+payments show cumulative progress ("₦70,000 of ₦80,000 paid, ₦10,000 still
+outstanding"), reconstructing the original from the outstanding amount plus the
+payments ledger, no schema change. Next: payment plans (expected instalments)
+and richer debtor conversations.
 
 ## Migrations
 

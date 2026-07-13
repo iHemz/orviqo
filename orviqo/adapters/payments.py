@@ -12,6 +12,8 @@ class PaymentStore(Protocol):
 
     async def for_invoice(self, invoice_id: str) -> list[Payment]: ...
 
+    async def total_paid(self, invoice_id: str) -> int: ...
+
 
 class InMemoryPaymentStore:
     def __init__(self) -> None:
@@ -24,3 +26,6 @@ class InMemoryPaymentStore:
 
     async def for_invoice(self, invoice_id: str) -> list[Payment]:
         return [p for p in self._payments if p.invoice_id == invoice_id]
+
+    async def total_paid(self, invoice_id: str) -> int:
+        return sum(p.amount_ngn for p in self._payments if p.invoice_id == invoice_id)

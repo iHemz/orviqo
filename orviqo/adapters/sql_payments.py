@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -27,6 +27,13 @@ class SqlAlchemyPaymentStore:
         async with self._engine.connect() as conn:
             result = await conn.execute(stmt)
             return [self._to_payment(row) for row in result]
+
+    async def total_paid(self, invoice_id: str) -> int:
+        stmt = select(func.coalesce(func.sum(payments.c.amount_ngn), 0)).where(
+            payments.c.invoice_id == invoice_id
+        )
+        async with self._engine.connect() as conn:
+            return int((await conn.execute(stmt)).scalar_one())
 
     @staticmethod
     def _to_payment(row: Row) -> Payment:

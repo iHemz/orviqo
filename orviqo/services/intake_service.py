@@ -156,10 +156,14 @@ class IntakeService:
             else:
                 text_out = f"Settled: {target.debtor_name} — ₦{owed:,} fully paid. [#{target.id}]"
         else:
-            await self._ledger.update(target.model_copy(update={"amount_ngn": owed - paid}))
+            outstanding = owed - paid
+            await self._ledger.update(target.model_copy(update={"amount_ngn": outstanding}))
+            total = await self._payments.total_paid(target.id)
+            original = outstanding + total  # the invoice's original amount, reconstructed
             text_out = (
                 f"Recorded ₦{paid:,} from {target.debtor_name}. "
-                f"₦{owed - paid:,} still outstanding. [#{target.id}]"
+                f"₦{total:,} of ₦{original:,} paid, ₦{outstanding:,} still outstanding. "
+                f"[#{target.id}]"
             )
         reply = Reply(text=text_out, recorded_invoice_id=target.id)
         await self._record(business_id, text, Decision.reconciled, action, reply.text, target.id)
@@ -168,9 +172,27 @@ class IntakeService:
     async def _answer(
         self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
     ) -> Reply:
-        answer = _answer_query(open_invoices, action.debtor_name)
+        if action.debtor_name:
+            # For a named debtor, enrich each debt with payment progress (bounded N).
+            answer = await self._answer_for_debtor(open_invoices, action.debtor_name)
+        else:
+            answer = _answer_query(open_invoices, None)
         await self._record(business_id, text, Decision.answered, action, answer, None)
         return Reply(text=answer)
+
+    async def _answer_for_debtor(self, open_invoices: list[Invoice], debtor_name: str) -> str:
+        matches = [i for i in open_invoices if i.debtor_name.lower() == debtor_name.lower()]
+        if not matches:
+            return f"You have no open debt recorded for {debtor_name}."
+        parts = []
+        for inv in matches:
+            paid = await self._payments.total_paid(inv.id)
+            summary = _summary(inv)
+            if paid > 0:  # only show progress once a partial payment exists
+                original = (inv.amount_ngn or 0) + paid
+                summary += f" — ₦{paid:,} of ₦{original:,} paid"
+            parts.append(summary)
+        return "; ".join(parts)
 
     async def _apply_contact(self, business_id: str, text: str, action: IntakeAction) -> Reply:
         # Need both a name and a number to chase anyone — otherwise ask for the gap.

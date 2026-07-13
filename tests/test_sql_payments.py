@@ -27,3 +27,13 @@ async def test_record_and_read_back_per_invoice(payments: SqlAlchemyPaymentStore
 
     assert [p.amount_ngn for p in await payments.for_invoice("inv1")] == [50_000, 30_000]
     assert await payments.for_invoice("unknown") == []
+
+
+async def test_total_paid_sums_per_invoice(payments: SqlAlchemyPaymentStore) -> None:
+    await payments.record("inv1", "biz1", 50_000)
+    await payments.record("inv1", "biz1", 30_000)
+    await payments.record("inv2", "biz1", 10_000)
+
+    assert await payments.total_paid("inv1") == 80_000
+    assert await payments.total_paid("inv2") == 10_000
+    assert await payments.total_paid("unknown") == 0  # coalesced to 0, not None

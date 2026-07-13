@@ -117,6 +117,22 @@ async def test_query_answers_a_specific_debtor_from_the_ledger(make_agent) -> No
     assert (await audit.entries("biz1"))[0].decision is Decision.answered
 
 
+async def test_query_for_debtor_shows_payment_progress(make_agent) -> None:
+    # After a partial payment, asking about the debtor shows how far they've got.
+    ledger, audit, payments = InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore()
+    inv = await ledger.add(
+        ParsedInvoice(debtor_name="Chidi", amount_ngn=30_000, item="rice", confidence=1.0), "b"
+    )
+    await payments.record(inv.id, "b", 50_000)  # ₦30k left of an ₦80k original
+    action = IntakeAction(kind="query", debtor_name="Chidi", confidence=0.9)
+    service = IntakeService(make_agent(action), ledger, audit, payments, InMemoryDebtorStore())
+
+    reply = await service.handle_message("b", "what does Chidi owe?")
+
+    assert "₦30,000" in reply.text  # still outstanding
+    assert "₦50,000 of ₦80,000 paid" in reply.text  # progress
+
+
 async def test_query_all_lists_open_debts(make_agent) -> None:
     ledger, audit = InMemoryLedger(), InMemoryAuditLog()
     await ledger.add(ParsedInvoice(debtor_name="Randi", amount_ngn=300_000, confidence=0.98), "b")
@@ -190,7 +206,8 @@ async def test_partial_payment_reduces_outstanding(make_agent) -> None:
 
     reply = await service.handle_message("b", "Chidi paid 50k")
 
-    assert "30,000 still outstanding" in reply.text
+    assert "₦50,000 of ₦80,000 paid" in reply.text  # running balance
+    assert "₦30,000 still outstanding" in reply.text
     [remaining] = await ledger.open_invoices("b")
     assert remaining.amount_ngn == 30_000
     assert (await payments.for_invoice(inv.id))[0].amount_ngn == 50_000
