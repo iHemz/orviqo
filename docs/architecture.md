@@ -102,8 +102,9 @@ Debtor-chasing ✅ — owner-attested consent: a `contact` intent saves a debtor
 number, `ChaseService` (2nd worker pass) messages debtors with overdue debts via
 an approved template, and inbound routing honors STOP (opt-out) before owner
 intake ever sees the message. Chasing is gated on `WHATSAPP_CHASE_TEMPLATE`;
-unset, the chase pass is a safe no-op. Next: partial-payment intelligence and
-richer debtor conversations (owner-notification on replies).
+unset, the chase pass is a safe no-op. A debtor's reply is relayed to the owner
+(best-effort) so the chase is a two-way signal. Next: partial-payment
+intelligence (payment plans / running balances) and richer debtor conversations.
 
 ## Migrations
 

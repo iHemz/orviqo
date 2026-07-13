@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = make_engine(settings.database_url)
     # Schema is managed by Alembic — run `uv run alembic upgrade head` before starting.
     debtor_store = SqlAlchemyDebtorStore(engine)
+    whatsapp = make_whatsapp_client(settings)
     app.state.service = IntakeService(
         agent=PydanticAIIntakeAgent(),
         ledger=SqlAlchemyLedger(engine),
@@ -44,8 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         debtors=debtor_store,
         confidence_threshold=settings.intake_confidence_threshold,
     )
-    app.state.inbox = DebtorInboxService(debtor_store)
-    whatsapp = make_whatsapp_client(settings)
+    app.state.inbox = DebtorInboxService(debtor_store, whatsapp)
     app.state.whatsapp = whatsapp
     try:
         yield
