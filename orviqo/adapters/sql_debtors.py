@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from orviqo.adapters.db import debtors
 from orviqo.domain.models import Debtor
+from orviqo.domain.phone import normalize_phone
 
 
 class SqlAlchemyDebtorStore:
@@ -21,6 +22,7 @@ class SqlAlchemyDebtorStore:
         self._engine = engine
 
     async def upsert(self, business_id: str, name: str, phone: str) -> Debtor:
+        phone = normalize_phone(phone)  # store canonical so inbound replies match
         async with self._engine.begin() as conn:
             existing = (await conn.execute(self._match(business_id, name))).first()
             if existing is None:
@@ -45,6 +47,23 @@ class SqlAlchemyDebtorStore:
         async with self._engine.connect() as conn:
             row = (await conn.execute(self._match(business_id, name))).first()
         return self._to_debtor(row) if row is not None else None
+
+    async def find_by_phone(self, phone: str) -> Debtor | None:
+        stmt = select(debtors).where(debtors.c.phone == normalize_phone(phone))
+        async with self._engine.connect() as conn:
+            row = (await conn.execute(stmt)).first()
+        return self._to_debtor(row) if row is not None else None
+
+    async def opt_out(self, business_id: str, name: str) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                sa_update(debtors)
+                .where(
+                    debtors.c.business_id == business_id,
+                    func.lower(debtors.c.name) == name.lower(),
+                )
+                .values(opted_out=True)
+            )
 
     @staticmethod
     def _match(business_id: str, name: str):

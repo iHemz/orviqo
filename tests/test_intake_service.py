@@ -282,9 +282,9 @@ async def test_contact_saves_the_debtors_number(make_agent) -> None:
 
     reply = await service.handle_message("b", "Chidi's number is 08031234567")
 
-    assert "08031234567" in reply.text
+    assert "2348031234567" in reply.text  # stored + shown in canonical wa_id form
     saved = await debtors.find("b", "chidi")  # case-insensitive lookup
-    assert saved is not None and saved.phone == "08031234567"
+    assert saved is not None and saved.phone == "2348031234567"
     assert (await audit.entries("b"))[0].decision is Decision.noted
 
 

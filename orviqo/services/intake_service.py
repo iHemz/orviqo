@@ -183,7 +183,7 @@ class IntakeService:
         debtor = await self._debtors.upsert(business_id, action.debtor_name, action.phone)
         reply = Reply(
             text=(
-                f"Saved {debtor.name}'s number ({debtor.phone}). "
+                f"Saved {debtor.name}'s number (+{debtor.phone}). "
                 "I'll chase them directly when a debt runs overdue."
             )
         )
