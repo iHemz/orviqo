@@ -15,21 +15,21 @@ import asyncio
 
 from orviqo.adapters.audit import InMemoryAuditLog
 from orviqo.adapters.ledger import InMemoryLedger
-from orviqo.agents.intake import PydanticAIIntakeParser
+from orviqo.agents.intake import PydanticAIIntakeAgent
 from orviqo.config import ConfigError, bootstrap
 from orviqo.services.intake_service import IntakeService
 
 _EXAMPLES = [
-    "Chidi owes 150k for the generator, due Friday",
-    "Mama Nkechi never paid for the rice",  # ambiguous amount -> should ask
-    "Tunde 1.5m balance on the contract, end of month",
+    "Randi owes 250k, due Friday",
+    "The debt is for a generator",  # should UPDATE the Randi invoice, not re-ask
+    "Mama Nkechi never paid",  # ambiguous -> should ask
 ]
 
 
 async def _run(messages: list[str]) -> None:
     settings = bootstrap()
     service = IntakeService(
-        parser=PydanticAIIntakeParser(),
+        agent=PydanticAIIntakeAgent(),
         ledger=InMemoryLedger(),
         audit=InMemoryAuditLog(),
         confidence_threshold=settings.intake_confidence_threshold,

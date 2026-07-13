@@ -73,3 +73,15 @@ async def test_roundtrip_preserves_fields(ledger: SqlAlchemyLedger) -> None:
     assert got.amount_ngn == 1_500_000
     assert got.item == "contract"
     assert got.due_date == date(2026, 7, 31)
+
+
+async def test_update_persists_changes(ledger: SqlAlchemyLedger) -> None:
+    invoice = await ledger.add(
+        ParsedInvoice(debtor_name="Randi", amount_ngn=250_000, confidence=0.98), "biz1"
+    )
+
+    await ledger.update(invoice.model_copy(update={"item": "generator"}))
+
+    [got] = await ledger.open_invoices("biz1")
+    assert got.item == "generator"
+    assert got.amount_ngn == 250_000

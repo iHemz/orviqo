@@ -20,6 +20,8 @@ from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
 class LedgerStore(Protocol):
     async def add(self, parsed: ParsedInvoice, business_id: str) -> Invoice: ...
 
+    async def update(self, invoice: Invoice) -> None: ...
+
     async def open_invoices(self, business_id: str) -> list[Invoice]: ...
 
 
@@ -38,6 +40,9 @@ class InMemoryLedger:
         )
         self._invoices[invoice.id] = invoice
         return invoice
+
+    async def update(self, invoice: Invoice) -> None:
+        self._invoices[invoice.id] = invoice
 
     async def open_invoices(self, business_id: str) -> list[Invoice]:
         return [

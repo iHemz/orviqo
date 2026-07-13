@@ -38,6 +38,17 @@ class SqlAlchemyAuditLog:
             result = await conn.execute(stmt)
             return [self._to_entry(row) for row in result]
 
+    async def recent(self, business_id: str, limit: int) -> list[AuditEntry]:
+        stmt = (
+            select(audit_log)
+            .where(audit_log.c.business_id == business_id)
+            .order_by(audit_log.c.id.desc())
+            .limit(limit)
+        )
+        async with self._engine.connect() as conn:
+            rows = list(await conn.execute(stmt))
+        return [self._to_entry(row) for row in reversed(rows)]
+
     @staticmethod
     def _to_entry(row: Row) -> AuditEntry:
         return AuditEntry(

@@ -78,3 +78,20 @@ async def test_entries_scoped_to_business_and_ordered(audit: SqlAlchemyAuditLog)
 
     assert [e.message for e in await audit.entries("biz1")] == ["first", "second"]
     assert [e.message for e in await audit.entries("biz2")] == ["other"]
+
+
+async def test_recent_returns_last_n_in_chronological_order(audit: SqlAlchemyAuditLog) -> None:
+    for i in range(5):
+        await audit.record(
+            AuditEntry(
+                business_id="biz1",
+                message=f"m{i}",
+                decision=Decision.asked,
+                confidence=0.3,
+                reason="?",
+            )
+        )
+
+    recent = await audit.recent("biz1", 3)
+
+    assert [e.message for e in recent] == ["m2", "m3", "m4"]

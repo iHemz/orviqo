@@ -27,8 +27,9 @@ class Settings(BaseSettings):
     orviqo_intake_model: str = "anthropic:claude-haiku-4-5"
     orviqo_reasoning_model: str = "anthropic:claude-opus-4-8"
 
-    # The rigor gate: below this confidence the agent asks instead of recording.
-    intake_confidence_threshold: float = 0.9
+    # Safety net: below this confidence a "create" falls back to asking. The agent
+    # itself decides create/update/clarify, so this is a low floor, not the main gate.
+    intake_confidence_threshold: float = 0.5
 
     # Ledger database. SQLite by default (zero setup); prod sets Postgres via
     # DATABASE_URL, e.g. postgresql+asyncpg://user:pass@host:5432/orviqo

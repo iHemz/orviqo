@@ -21,7 +21,7 @@ WhatsApp client — without touching it.
   │ adapters/audit.py    (AuditLog ← InMemoryAuditLog)           │
   │ adapters/sql_audit   (AuditLog ← SqlAlchemyAuditLog)         │
   │ adapters/whatsapp.py (WhatsAppClient ← LoggingClient)        │
-  │ agents/base.py       (InvoiceParser ← PydanticAIParser)      │
+  │ agents/base.py       (IntakeAgent ← PydanticAIIntakeAgent)   │
   └────────────────────────────────────────────────────────────┘
 ```
 
@@ -44,7 +44,7 @@ today — not a hypothetical one:
   (Postgres in prod, SQLite for local dev) both satisfy it; the composition root
   picks one. Swapping them changed **zero** lines in `services`.
 - **`AuditLog`** — same story: in-memory for the CLI/tests, SQLAlchemy in prod.
-- **`InvoiceParser`** — tests inject a `FakeParser` so the suite runs offline.
+- **`IntakeAgent`** — tests inject a `FakeAgent` so the suite runs offline.
 
 Everything else is concrete. We add an abstraction on the second real use, not
 in anticipation of one.
@@ -58,14 +58,21 @@ LLM calls share. `SqlAlchemyLedger` uses SQLAlchemy 2.0 async Core and takes an
 whether it's talking to Postgres or SQLite, and its tests
 (`tests/test_sql_ledger.py`) run against a real SQLite file, no mocks.
 
-## The rigor gate
+## Conversational intake + the rigor gate
 
-`IntakeService.handle_message` records an invoice **only** when the parse is
-confident, unambiguous, and has an amount. Otherwise it asks. This is the
-product's trust promise expressed as one branch, and
-`tests/test_intake_service.py` pins all three refusal paths.
+Intake is **context-aware**, not one message at a time. For each message the
+service gathers the sender's **open invoices** (from the ledger) and the **recent
+conversation** (reused from the `audit_log` — no new table), hands them to the
+`IntakeAgent`, and gets back an **`IntakeAction`**: `create`, `update`, or
+`clarify`. So a follow-up like *"the debt is for a generator"* updates the invoice
+just recorded instead of re-interrogating the owner.
 
-**Every** decision — recorded *or* refused — is written to the `audit_log` with
+The rigor gate still holds: the service refuses to `create` without a debtor and
+an amount (the agent's own `clarify` handles genuine uncertainty; the confidence
+floor is a light safety net, not the main gate). `tests/test_intake_service.py`
+pins create / update / clarify and the refusal paths.
+
+**Every** decision — recorded, updated, *or* refused — is written to the `audit_log` with
 the source message (the citation), the confidence, and the reason. The refusals
 are the most valuable rows: they are the evidence that Orviqo didn't invent a
 number. (Ledger write and audit write are separate transactions today; a single

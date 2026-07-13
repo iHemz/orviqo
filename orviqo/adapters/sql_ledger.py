@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import insert, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -41,6 +42,20 @@ class SqlAlchemyLedger:
                 )
             )
         return invoice
+
+    async def update(self, invoice: Invoice) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                sa_update(invoices)
+                .where(invoices.c.id == invoice.id)
+                .values(
+                    debtor_name=invoice.debtor_name,
+                    amount_ngn=invoice.amount_ngn,
+                    item=invoice.item,
+                    due_date=invoice.due_date,
+                    status=invoice.status.value,
+                )
+            )
 
     async def open_invoices(self, business_id: str) -> list[Invoice]:
         stmt = select(invoices).where(

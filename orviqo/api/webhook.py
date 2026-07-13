@@ -22,7 +22,7 @@ from orviqo.adapters.whatsapp import (
     iter_text_messages,
     make_whatsapp_client,
 )
-from orviqo.agents.intake import PydanticAIIntakeParser
+from orviqo.agents.intake import PydanticAIIntakeAgent
 from orviqo.config import bootstrap, settings
 from orviqo.services.intake_service import IntakeService
 
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = make_engine(settings.database_url)
     # Schema is managed by Alembic — run `uv run alembic upgrade head` before starting.
     app.state.service = IntakeService(
-        parser=PydanticAIIntakeParser(),
+        agent=PydanticAIIntakeAgent(),
         ledger=SqlAlchemyLedger(engine),
         audit=SqlAlchemyAuditLog(engine),
         confidence_threshold=settings.intake_confidence_threshold,
