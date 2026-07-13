@@ -87,6 +87,43 @@ async def test_update_to_unknown_invoice_falls_back_to_ask(make_agent) -> None:
     assert (await audit.entries("biz1"))[0].decision is Decision.asked
 
 
+async def test_query_answers_a_specific_debtor_from_the_ledger(make_agent) -> None:
+    ledger, audit = InMemoryLedger(), InMemoryAuditLog()
+    await ledger.add(
+        ParsedInvoice(debtor_name="Randi", amount_ngn=300_000, item="generator", confidence=0.98),
+        "biz1",
+    )
+    action = IntakeAction(kind="query", debtor_name="Randi", confidence=0.9)
+    service = IntakeService(make_agent(action), ledger, audit)
+
+    reply = await service.handle_message("biz1", "what does Randi owe?")
+
+    assert "Randi owes ₦300,000" in reply.text
+    assert reply.recorded_invoice_id is None
+    assert (await audit.entries("biz1"))[0].decision is Decision.answered
+
+
+async def test_query_all_lists_open_debts(make_agent) -> None:
+    ledger, audit = InMemoryLedger(), InMemoryAuditLog()
+    await ledger.add(ParsedInvoice(debtor_name="Randi", amount_ngn=300_000, confidence=0.98), "b")
+    await ledger.add(ParsedInvoice(debtor_name="Chidi", amount_ngn=150_000, confidence=0.98), "b")
+    action = IntakeAction(kind="query", confidence=0.9)
+    service = IntakeService(make_agent(action), ledger, audit)
+
+    reply = await service.handle_message("b", "who owes me?")
+
+    assert "Randi" in reply.text and "Chidi" in reply.text
+
+
+async def test_query_unknown_debtor_says_so(make_agent) -> None:
+    action = IntakeAction(kind="query", debtor_name="Ghost", confidence=0.9)
+    service = IntakeService(make_agent(action), InMemoryLedger(), InMemoryAuditLog())
+
+    reply = await service.handle_message("biz1", "does Ghost owe me?")
+
+    assert "no open debt" in reply.text.lower()
+
+
 async def test_agent_receives_open_invoices_and_history_as_context(make_agent) -> None:
     # The fix for the re-interrogation bug: on the 2nd message the agent must see
     # the invoice recorded by the 1st, and the 1st exchange.

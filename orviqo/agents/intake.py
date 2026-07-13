@@ -28,6 +28,10 @@ Choose exactly one `kind`:
 - "update": the message adds detail to, corrects, or answers a question about an
   EXISTING open invoice (match it by debtor name or clear context). Set
   `invoice_id` to that invoice's id and fill ONLY the fields that change.
+- "query": the owner is ASKING about existing debts, not recording one ("what
+  does X owe?", "how much does X owe me?", "who owes me?", "list my debts"). Set
+  `debtor_name` if they ask about a specific person, otherwise leave it null. Do
+  not fill amount/item/due — the answer comes from the ledger, not from you.
 - "clarify": you genuinely cannot tell what to record and cannot resolve it from
   the open invoices or recent conversation. Ask ONE short question.
 

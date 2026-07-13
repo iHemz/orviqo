@@ -63,9 +63,11 @@ whether it's talking to Postgres or SQLite, and its tests
 Intake is **context-aware**, not one message at a time. For each message the
 service gathers the sender's **open invoices** (from the ledger) and the **recent
 conversation** (reused from the `audit_log` — no new table), hands them to the
-`IntakeAgent`, and gets back an **`IntakeAction`**: `create`, `update`, or
-`clarify`. So a follow-up like *"the debt is for a generator"* updates the invoice
-just recorded instead of re-interrogating the owner.
+`IntakeAgent`, and gets back an **`IntakeAction`**: `create`, `update`, `query`,
+or `clarify`. So a follow-up like *"the debt is for a generator"* updates the
+invoice just recorded, and *"what does Randi owe?"* is answered from the ledger —
+instead of re-interrogating the owner. Query answers are formatted from the DB
+rows, not composed by the LLM, so the numbers are never transcribed by the model.
 
 The rigor gate still holds: the service refuses to `create` without a debtor and
 an amount (the agent's own `clarify` handles genuine uncertainty; the confidence

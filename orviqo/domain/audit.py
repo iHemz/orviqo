@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 class Decision(StrEnum):
     recorded = "recorded"
     updated = "updated"
+    answered = "answered"
     asked = "asked"
 
 

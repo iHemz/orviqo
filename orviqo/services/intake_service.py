@@ -29,12 +29,28 @@ class Reply(BaseModel):
     recorded_invoice_id: str | None = None
 
 
-def _confirmation(invoice: Invoice, verb: str) -> str:
+def _summary(invoice: Invoice) -> str:
     due = invoice.due_date.isoformat() if invoice.due_date else "no due date"
     return (
-        f"{verb}: {invoice.debtor_name} owes ₦{invoice.amount_ngn:,} "
-        f"for {invoice.item or 'unspecified'} ({due}). [#{invoice.id}]"
+        f"{invoice.debtor_name} owes ₦{invoice.amount_ngn:,} "
+        f"for {invoice.item or 'unspecified'} ({due}) [#{invoice.id}]"
     )
+
+
+def _confirmation(invoice: Invoice, verb: str) -> str:
+    return f"{verb}: {_summary(invoice)}."
+
+
+def _answer_query(open_invoices: list[Invoice], debtor_name: str | None) -> str:
+    if debtor_name:
+        matches = [i for i in open_invoices if i.debtor_name.lower() == debtor_name.lower()]
+        if not matches:
+            return f"You have no open debt recorded for {debtor_name}."
+        return "; ".join(_summary(i) for i in matches)
+    if not open_invoices:
+        return "You have no open debts recorded."
+    lines = "\n".join(f"- {_summary(i)}" for i in open_invoices)
+    return f"You have {len(open_invoices)} open debt(s):\n{lines}"
 
 
 def _changed_fields(action: IntakeAction) -> dict:
@@ -61,11 +77,20 @@ class IntakeService:
         history = await self._recent_turns(business_id)
         action = await self._agent.decide(text, open_invoices, history)
 
+        if action.kind == "query":
+            return await self._answer(business_id, text, action, open_invoices)
         if action.kind == "update":
             return await self._apply_update(business_id, text, action, open_invoices)
         if action.kind == "create" and self._can_record(action):
             return await self._apply_create(business_id, text, action)
         return await self._ask(business_id, text, action)
+
+    async def _answer(
+        self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
+    ) -> Reply:
+        answer = _answer_query(open_invoices, action.debtor_name)
+        await self._record(business_id, text, Decision.answered, action, answer, None)
+        return Reply(text=answer)
 
     def _can_record(self, action: IntakeAction) -> bool:
         # The rigor gate: never create without a debtor, an amount, and confidence.
