@@ -8,6 +8,9 @@ This is **Week 1**: the intake loop — a message in, a structured (or clarified
 invoice out. See the [spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md)
 for the full plan and [`docs/architecture.md`](docs/architecture.md) for the design.
 
+> **Plays:** the product, career, and audience playbooks live in [`PLAYS.md`](PLAYS.md).
+> In a Claude Code session here, run `/play product` (or `career` / `audience`).
+
 ## Quickstart
 
 Uses [uv](https://docs.astral.sh/uv/). `uv sync` creates the virtualenv, writes
