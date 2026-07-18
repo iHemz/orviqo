@@ -33,9 +33,33 @@ businesses. Start with one segment where debts are large and memory is the only 
   credit history, staff/multi-user, light invoicing/receipts.
 - Land as a personal debt-tracker, grow into the SMB's cash-flow brain.
 
-**Pricing.** Low monthly Naira subscription tiered by debtor volume (test ~₦2.5k-7.5k/mo).
-Freemium: free up to N debtors, pay to scale. Later: small fee on reconciled/recovered
-amounts. WhatsApp-native = zero install friction.
+**Monetization.** The tracker + reminders is the *wedge*, not the revenue. Nobody in this
+market pays a subscription for a utility — Kippa signed up 350k SMBs and still couldn't
+monetize the tool. The real asset is the ledger: who-owes-whom, and who actually pays.
+Revenue, in order of how naturally it falls out of the product:
+- **Payments (the real one).** Reminders end with a pay-link (Paystack/Flutterwave/bank
+  transfer). Orviqo sits *in the money flow* and takes a small transaction cut. You don't
+  charge for the chat — you earn when the debtor taps *pay*. The rigor gate (trust) is what
+  earns the right to sit between a business and its customers' money.
+- **Receivables financing (later, fat play).** The tracked ledger + payment behavior is
+  underwriting data no one else has. Advance cash against a receivable (factor the debt:
+  "take ₦85k now for that ₦100k Mama Buchi owes"). The rigor gate *is* the risk model.
+- **Thin pro subscription (margin, not headline).** ~₦2.5-7.5k/mo for multi-staff, more
+  reminders, statements. Larger-debt segments (building materials, spare parts) will pay it;
+  treat as margin on top, not the thing that has to work.
+- **Outcome fee** on recovered cash aligns with the brand but only collects if you're already
+  in the payment flow — so it's a pricing skin on payments, not a separate model.
+- WhatsApp-native = zero install friction, which is what makes the free wedge cheap to spread.
+
+**Unit economics (why subscription alone won't carry it).** Marginal cost per active SMB is
+~$0.70-1.50/mo (₦1-2.5k at ~₦1,550/$): LLM is cents (Haiku, a few hundred tokens/msg), the
+cost driver is WhatsApp *outbound*. Nigeria per-message rates (Meta, July-2025 card): service
+(owner↔bot, in 24h window) **free**; utility template **$0.0067**; marketing **$0.0516**;
+a BSP like Twilio adds ~$0.005/msg unless on a flat-fee plan (360dialog). So keep reminders
+in the utility lane, not marketing. Implication: a ₦2.5k sub is near break-even — but a 1%
+cut on ₦300k recovered/mo = ₦3k, which alone beats the sub *and* covers cost. Payments is
+~3-5x the subscription per active user and scales with the value delivered. That's the
+answer to "how do you monetize something that lives on WhatsApp."
 
 **Moat / honesty angle.** The rigor gate. In a low-trust, relationship-based market, an
 agent that duns the wrong person or invents a figure is worse than no agent. "It knows
@@ -83,11 +107,20 @@ agent"), LinkedIn. Strong for fintech / AI-agent / Africa-focused roles.
 
 **Next steps.**
 - [ ] Capture 2-3 hard numbers from a pilot (recovered cash, ask-vs-invent rate)
-- [ ] Record a 30-60s WhatsApp demo (GIF/video)
-- [ ] Write the case study; add to portfolio PROJECTS + resume
+- [x] Record a 30-60s WhatsApp demo (GIF/video) — content/audience/assets/orviqo-demo.gif
+      (43s: NL intake, partial-payment reconciliation, save-contact, clean ledger)
+- [x] Write the case study; add to portfolio PROJECTS + resume
+      (portfolio: /work/orviqo — hero WhatsApp thread + audit-ledger & refusal
+      proofs + rigor-gate code, all grounded in real source; PROJECTS card #03
+      with a hand-built SVG; resume: CV_PROJECTS entry → ATS PDF + Dossier, plus
+      the Terminal highlights. tsc + eslint + next build all green.)
 - [ ] Add one line to CV_SUMMARY / short-phrase pitches
 
-**Status:** _not started_
+**Status:** Case study shipped — a full /work/orviqo case study (mirrors the
+Verdkt honesty page), an Orviqo card in portfolio PROJECTS, and a resume entry,
+every claim traced to real code (record-vs-ask gate, 61 offline tests, audit
+trail). Next: the CV_SUMMARY line, then pilot numbers (blocked on recruiting
+pilots — a Product-play step).
 
 ---
 
@@ -111,8 +144,11 @@ One post/week + milestone posts.
 metrics card.
 
 **Next steps.**
-- [ ] Post #1: the thesis + rigor-gate demo; invite SMBs to pilot in the comments
+- [ ] Post #1: the thesis + demo GIF (pilot call held back till onboarding is smoother)
+      (drafted → content/audience/post-01-rigor-gate.md; GIF ready at
+      content/audience/assets/orviqo-demo.gif; awaiting publish on LinkedIn)
 - [ ] Turn the case study into a portfolio essay (cross-post)
 - [ ] Milestone post when first real debt is recovered
 
-**Status:** _not started_
+**Status:** Post #1 drafted (LinkedIn + X variants) with a real 43s WhatsApp demo GIF
+attached; awaiting publish. Pilot invite deferred by decision.
