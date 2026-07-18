@@ -114,13 +114,16 @@ agent"), LinkedIn. Strong for fintech / AI-agent / Africa-focused roles.
       proofs + rigor-gate code, all grounded in real source; PROJECTS card #03
       with a hand-built SVG; resume: CV_PROJECTS entry → ATS PDF + Dossier, plus
       the Terminal highlights. tsc + eslint + next build all green.)
-- [ ] Add one line to CV_SUMMARY / short-phrase pitches
+- [x] Add one line to CV_SUMMARY / short-phrase pitches
+      (CV_SUMMARY now names the throughline — grounded, high-trust AI that knows
+      when not to act — and cites Orviqo as the most recent example.)
 
-**Status:** Case study shipped — a full /work/orviqo case study (mirrors the
-Verdkt honesty page), an Orviqo card in portfolio PROJECTS, and a resume entry,
-every claim traced to real code (record-vs-ask gate, 61 offline tests, audit
-trail). Next: the CV_SUMMARY line, then pilot numbers (blocked on recruiting
-pilots — a Product-play step).
+**Status:** Case study + summary line shipped. The /work/orviqo case study
+(mirrors the Verdkt honesty page), an Orviqo card in portfolio PROJECTS, a
+CV_PROJECTS entry, and a sharpened CV_SUMMARY are all live — every claim traced
+to real code (record-vs-ask gate, 61 offline tests, audit trail). Only remaining
+step: 2-3 hard numbers from a pilot, blocked on recruiting pilots (a Product-play
+step).
 
 ---
 
