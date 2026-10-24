@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str = ""
     whatsapp_api_version: str = "v21.0"
 
+    # The Orviqo business number as people dial it (e.g. +234 803 123 4567). Public,
+    # not a secret: it powers the /start click-to-chat link. Empty = /start is off.
+    whatsapp_display_number: str = ""
+
     # Debtor-chasing: the Meta-approved template used to message a debtor outside
     # the 24h window. Empty = chasing off (the worker skips it) until registered.
     whatsapp_chase_template: str = ""

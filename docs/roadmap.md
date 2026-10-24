@@ -27,12 +27,13 @@ running balance → two-way replies**, multi-tenant by the owner's WhatsApp numb
 real SMB owner to discover or start using Orviqo.** This is the top thing to solve
 before the product is "real". Details in the section below; concrete backlog:
 
-- [ ] **First-run onboarding.** A brand-new sender gets no welcome. Add a greeting
-      for an unknown owner's first message: what Orviqo is + one example
-      ("Try: 'Chidi owes 50k for rice, due Friday'").
-- [ ] **A shareable entry point.** People can't find a WhatsApp number by search.
-      Need a `wa.me/<number>` link + QR code (on a landing page / socials) that
-      opens a chat with the Orviqo number.
+- [x] **First-run onboarding.** A sender with no prior turns gets a welcome (what
+      Orviqo does + example messages) sent ahead of the normal reply; their first
+      message is still acted on.
+- [x] **A shareable entry point.** `/start` redirects to a `wa.me` chat prefilled
+      with "Hi Orviqo"; `tools/entry_qr.py` makes its QR code. Live once
+      `WHATSAPP_DISPLAY_NUMBER` is set (see [deploy.md](deploy.md)). Still needs a
+      home: a landing page or socials to put the link and QR on.
 - [ ] **Messaging limits & verification.** The WhatsApp number starts at a low
       tier (a few hundred unique users/day). Scaling needs Meta Business
       Verification and climbing the messaging tiers via good quality ratings.

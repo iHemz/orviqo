@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query, Request, Response
+from fastapi.responses import RedirectResponse
 
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.processed import ProcessedMessageStore
@@ -28,6 +29,7 @@ from orviqo.adapters.whatsapp import (
 )
 from orviqo.agents.intake import PydanticAIIntakeAgent
 from orviqo.config import bootstrap, settings
+from orviqo.domain.entry import whatsapp_link
 from orviqo.services.debtor_inbox import DebtorInboxService
 from orviqo.services.intake_service import IntakeService
 
@@ -64,6 +66,17 @@ def create_app() -> FastAPI:
     def health() -> dict:
         """Liveness check for the platform load balancer (Fly)."""
         return {"status": "ok"}
+
+    @app.get("/start")
+    def start() -> Response:
+        """The shareable entry point: redirect to a WhatsApp chat with Orviqo.
+
+        Share this URL (and its QR code) rather than a raw wa.me link, so the
+        business number can change without reprinting anything.
+        """
+        if not settings.whatsapp_display_number:
+            return Response("Orviqo isn't open for new chats yet.", status_code=503)
+        return RedirectResponse(whatsapp_link(settings.whatsapp_display_number), 302)
 
     @app.get("/webhook")
     def verify(
