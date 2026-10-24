@@ -6,7 +6,7 @@ Orviqo runs entirely on free tiers, no card required:
 |---|---|---|
 | App (webhook, site, demo, cron) | **Vercel Hobby** | FastAPI runs as one function; one cron run per day. Hobby is for non-commercial use, fine for a showcase or pilot. |
 | Database | **Neon** Postgres | Compute suspends after a few idle minutes; the first request after a lull takes about a second longer. |
-| LLM | **Gemini** via Google AI Studio | Rate-limited per minute and per day; over the limit returns 429, never a bill. Free-tier models also return 503 "high demand" at busy times, so the default is a fallback chain (Flash, then Flash-Lite). On the free tier Google may use prompts to improve its products, so revisit before real owners' data flows through it. |
+| LLM | **Gemini** via Google AI Studio | Rate-limited per minute and per day; over the limit returns 429, never a bill. Free-tier models also return 503 "high demand" at busy times, so the default is a fallback chain (Flash-Lite, then Flash). On the free tier Google may use prompts to improve its products, so revisit before real owners' data flows through it. |
 | Messaging | **WhatsApp Cloud API** | Owner-initiated chats are free. See [WhatsApp](#4-whatsapp-optional) for the test-number limit. |
 
 A container host (Fly.io) is still supported; see [the end](#alternative-a-container-host-flyio).

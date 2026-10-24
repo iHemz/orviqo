@@ -59,7 +59,7 @@ times out, the next one answers. Only the listed providers' API keys are require
 
 | Model | Key | Notes |
 |-------|-----|-------|
-| `google:gemini-flash-latest,google:gemini-flash-lite-latest` (default) | `GOOGLE_API_KEY` | free tier, no card; Flash-Lite has its own quota |
+| `google:gemini-flash-lite-latest,google:gemini-flash-latest` (default) | `GOOGLE_API_KEY` | free tier, no card; Flash-Lite answers fast, Flash (own quota) is the backup |
 | `anthropic:claude-haiku-4-5` | `ANTHROPIC_API_KEY` | cheap + fast for high-volume NL→struct |
 
 ## Develop

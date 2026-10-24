@@ -53,10 +53,11 @@ class Settings(BaseSettings):
     google_api_key: str = ""  # Gemini, from Google AI Studio (has a free tier)
 
     # Pydantic AI model strings, comma-separated: the first is used, and each next
-    # one takes over when the one before is overloaded or slow. Gemini Flash, then
-    # Flash-Lite (a separate free-tier quota) is the default. Any provider in
-    # _PROVIDER_KEYS works, e.g. anthropic:claude-haiku-4-5.
-    orviqo_intake_model: str = "google:gemini-flash-latest,google:gemini-flash-lite-latest"
+    # one takes over when the one before is overloaded or slow. The default is
+    # Gemini Flash-Lite, then Flash (separate free-tier quotas): on the live demo
+    # Flash-Lite answered in about 4s while Flash was overloaded or too slow. Any
+    # provider in _PROVIDER_KEYS works, e.g. anthropic:claude-haiku-4-5.
+    orviqo_intake_model: str = "google:gemini-flash-lite-latest,google:gemini-flash-latest"
     orviqo_reasoning_model: str = "anthropic:claude-opus-4-8"
 
     # Safety net: below this confidence a "create" falls back to asking. The agent
