@@ -1,10 +1,11 @@
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+#
+# Manual only: the app is hosted on Vercel's free tier (which deploys on push via
+# its Git integration). Run this from the Actions tab to deploy to Fly instead.
 
 name: Fly Deploy
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 jobs:
   deploy:
     name: Deploy app
