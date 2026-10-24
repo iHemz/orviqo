@@ -92,6 +92,8 @@ def create_app() -> FastAPI:
                 await whatsapp.send_text(msg.sender, debtor_reply)
             else:
                 reply = await service.handle_message(msg.sender, msg.text)
+                if reply.welcome:
+                    await whatsapp.send_text(msg.sender, reply.welcome)
                 await whatsapp.send_text(msg.sender, reply.text)
             # Mark only after a clean handle: a failure above leaves it unmarked so
             # WhatsApp's retry reprocesses it, rather than dropping the message.
