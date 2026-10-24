@@ -52,12 +52,14 @@ adapters to the service. See [`docs/architecture.md`](docs/architecture.md).
 
 ## Models
 
-The intake model is one env var, `ORVIQO_INTAKE_MODEL` (a Pydantic AI model
-string); only that provider's API key is required.
+The intake model is one env var, `ORVIQO_INTAKE_MODEL`: a Pydantic AI model
+string, or a comma-separated fallback list. Each model gets one 12-second
+attempt; if it errors (e.g. Gemini's free tier answering 503 "high demand") or
+times out, the next one answers. Only the listed providers' API keys are required.
 
 | Model | Key | Notes |
 |-------|-----|-------|
-| `google:gemini-flash-latest` (default) | `GOOGLE_API_KEY` | free tier, no card; fast structured output |
+| `google:gemini-flash-latest,google:gemini-flash-lite-latest` (default) | `GOOGLE_API_KEY` | free tier, no card; Flash-Lite has its own quota |
 | `anthropic:claude-haiku-4-5` | `ANTHROPIC_API_KEY` | cheap + fast for high-volume NL→struct |
 
 ## Develop
