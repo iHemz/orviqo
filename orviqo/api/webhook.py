@@ -13,6 +13,7 @@ looks for ``app`` at the entrypoint set in pyproject ``[tool.vercel]``).
 
 from __future__ import annotations
 
+import logging
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -46,6 +47,9 @@ from orviqo.services.intake_service import IntakeService
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bootstrap()  # fail fast on a missing key; export it for Pydantic AI
+    # Our INFO lines (e.g. which model answered) belong in the platform's logs too.
+    logging.basicConfig(level=logging.INFO)
+    logging.getLogger("orviqo").setLevel(logging.INFO)
     engine = make_engine(settings.database_url)
     # Schema is managed by Alembic — run `uv run alembic upgrade head` before starting.
     debtor_store = SqlAlchemyDebtorStore(engine)

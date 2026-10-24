@@ -9,7 +9,9 @@ re-interrogating the owner for things it just recorded.
 
 from __future__ import annotations
 
+import logging
 import os
+import time
 from datetime import date
 
 import httpx
@@ -51,6 +53,8 @@ Choose exactly one `kind`:
   new debt — do not set amount_ngn.
 - "clarify": you genuinely cannot tell what to record and cannot resolve it from
   the open invoices or recent conversation. Ask ONE short question.
+- "greeting": a hello, thanks, or small talk with no debt, payment or question
+  in it ("Hi Orviqo", "good morning", "thanks"). Set nothing else.
 
 A "query" must be a QUESTION. A statement that someone owes or hasn't paid
 ("Mama Nkechi never paid", "Tunde still owes me") is never a query: record it
@@ -92,6 +96,8 @@ def _format_context(open_invoices: list[Invoice], history: list[Turn]) -> str:
             lines.append(f"  you:   {turn.bot}")
     return "\n".join(lines)
 
+
+log = logging.getLogger("orviqo.intake")
 
 # A visitor (or an owner on WhatsApp) is waiting on every call, so each model
 # gets one short attempt; if it is overloaded or slow, the next model answers.
@@ -159,5 +165,14 @@ class PydanticAIIntakeAgent:
             f'New message from the owner: "{message}"\n'
             "Decide the action."
         )
+        started = time.monotonic()
         result = await self._agent.run(prompt)
+        # Which model answered matters with a fallback chain: it shows when the
+        # first choice is overloaded or slow.
+        log.info(
+            "intake decided %s via %s in %.1fs",
+            result.output.kind,
+            result.response.model_name,
+            time.monotonic() - started,
+        )
         return result.output

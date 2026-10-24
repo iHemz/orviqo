@@ -23,7 +23,7 @@ class Turn(BaseModel):
 class IntakeAction(BaseModel):
     """The agent's decision for one inbound message, given the context."""
 
-    kind: Literal["create", "update", "query", "payment", "contact", "clarify"]
+    kind: Literal["create", "update", "query", "payment", "contact", "clarify", "greeting"]
     invoice_id: str | None = Field(
         default=None, description="Which open invoice to update/settle (update, payment)."
     )

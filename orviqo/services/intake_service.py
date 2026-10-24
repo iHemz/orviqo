@@ -22,6 +22,10 @@ from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
 
 _HISTORY_TURNS = 6
 _FALLBACK_ASK = "Sorry, I didn't fully get that — who owes you, how much, and by when?"
+_GREETING_REPLY = (
+    'Hi! Tell me about a debt ("Chidi owes 50k for rice"), a payment '
+    '("Chidi paid 20k"), or ask "who owes me?".'
+)
 WELCOME = (
     "Hi, I'm Orviqo. I keep track of who owes you money, remind you when a debt "
     "is overdue, and can chase debtors for you on WhatsApp.\n\n"
@@ -125,11 +129,11 @@ class IntakeService:
             return await self._act(business_id, text, action, open_invoices)
 
         # No prior turns in the audit log: this sender has never talked to us.
-        if action.kind == "clarify":
-            # Nothing to act on yet (e.g. "Hi"): the welcome already says what to
-            # send, so it *is* the reply, rather than a welcome plus a question.
+        if action.kind == "greeting":
+            # A bare "Hi": the welcome already says what to send, so it *is* the
+            # reply. Anything else (even a vague debt) gets the welcome, then the reply.
             reply = Reply(text=WELCOME)
-            await self._record(business_id, text, Decision.asked, action, reply.text, None)
+            await self._record(business_id, text, Decision.answered, action, reply.text, None)
             return reply
         reply = await self._act(business_id, text, action, open_invoices)
         return reply.model_copy(update={"welcome": WELCOME})
@@ -137,6 +141,10 @@ class IntakeService:
     async def _act(
         self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
     ) -> Reply:
+        if action.kind == "greeting":
+            reply = Reply(text=_GREETING_REPLY)
+            await self._record(business_id, text, Decision.answered, action, reply.text, None)
+            return reply
         if action.kind == "query":
             return await self._answer(business_id, text, action, open_invoices)
         if action.kind == "payment":
@@ -168,8 +176,7 @@ class IntakeService:
             # Payment with no amount and not marked "in full" — ask, offering the total.
             owed = target.amount_ngn or 0
             question = (
-                f"How much did {target.debtor_name} pay — the amount, "
-                f"or say 'in full' (₦{owed:,})?"
+                f"How much did {target.debtor_name} pay — the amount, or say 'in full' (₦{owed:,})?"
             )
             reply = Reply(text=question)
             await self._record(business_id, text, Decision.asked, action, reply.text, None)
