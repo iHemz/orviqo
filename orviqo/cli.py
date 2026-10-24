@@ -40,7 +40,10 @@ async def _run(messages: list[str]) -> None:
     )
     for msg in messages:
         reply = await service.handle_message("cli-demo", msg)
-        print(f"\n> {msg}\n{reply.text}")
+        print(f"\n> {msg}")
+        if reply.welcome:
+            print(f"{reply.welcome}\n")
+        print(reply.text)
 
 
 def main() -> None:

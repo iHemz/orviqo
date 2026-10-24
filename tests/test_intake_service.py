@@ -16,7 +16,7 @@ from orviqo.adapters.payments import InMemoryPaymentStore
 from orviqo.domain.audit import Decision
 from orviqo.domain.intake import IntakeAction
 from orviqo.domain.models import ParsedInvoice
-from orviqo.services.intake_service import IntakeService
+from orviqo.services.intake_service import WELCOME, IntakeService
 
 
 async def test_create_records_and_audits(make_agent) -> None:
@@ -317,3 +317,37 @@ async def test_contact_without_a_number_asks(make_agent) -> None:
     assert "number" in reply.text.lower()
     assert await debtors.find("b", "Chidi") is None  # nothing saved without a phone
     assert (await audit.entries("b"))[0].decision is Decision.asked
+
+
+async def test_first_message_from_new_sender_gets_welcome(make_agent) -> None:
+    # First contact: welcome the owner, but still act on the message itself.
+    action = IntakeAction(
+        kind="create", debtor_name="Chidi", amount_ngn=50_000, item="rice", confidence=0.95
+    )
+    ledger, audit = InMemoryLedger(), InMemoryAuditLog()
+    service = IntakeService(
+        make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
+
+    reply = await service.handle_message("new-owner", "Chidi owes 50k for rice")
+
+    assert reply.welcome == WELCOME
+    assert reply.text.startswith("Noted:")
+    assert len(await ledger.open_invoices("new-owner")) == 1
+
+
+async def test_returning_sender_gets_no_welcome(make_agent) -> None:
+    action = IntakeAction(kind="clarify", clarify="Who owes you?", confidence=0.3)
+    service = IntakeService(
+        make_agent(action),
+        InMemoryLedger(),
+        InMemoryAuditLog(),
+        InMemoryPaymentStore(),
+        InMemoryDebtorStore(),
+    )
+
+    first = await service.handle_message("biz1", "hi")
+    second = await service.handle_message("biz1", "someone owes me")
+
+    assert first.welcome is not None
+    assert second.welcome is None

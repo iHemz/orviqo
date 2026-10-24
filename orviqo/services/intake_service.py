@@ -22,13 +22,29 @@ from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
 
 _HISTORY_TURNS = 6
 _FALLBACK_ASK = "Sorry, I didn't fully get that — who owes you, how much, and by when?"
+WELCOME = (
+    "Hi, I'm Orviqo. I keep track of who owes you money, remind you when a debt "
+    "is overdue, and can chase debtors for you on WhatsApp.\n\n"
+    "Just tell me in your own words, for example:\n"
+    '- "Chidi owes 50k for rice, due Friday"\n'
+    '- "Chidi paid 20k"\n'
+    '- "What does Chidi owe?"\n'
+    '- "Chidi\'s number is 0803 123 4567"\n\n'
+    "If anything is unclear, I'll ask rather than guess."
+)
 
 
 class Reply(BaseModel):
-    """What Orviqo says back. ``recorded_invoice_id`` is set when we wrote/updated."""
+    """What Orviqo says back. ``recorded_invoice_id`` is set when we wrote/updated.
+
+    ``welcome`` is set on a sender's very first message: an intro the delivery
+    layer sends *before* ``text``, so a first message that is already a real debt
+    still gets handled instead of being swallowed by a greeting.
+    """
 
     text: str
     recorded_invoice_id: str | None = None
+    welcome: str | None = None
 
 
 def _summary(invoice: Invoice) -> str:
@@ -104,6 +120,15 @@ class IntakeService:
     async def handle_message(self, business_id: str, text: str) -> Reply:
         open_invoices = await self._ledger.open_invoices(business_id)
         history = await self._recent_turns(business_id)
+        reply = await self._act(business_id, text, open_invoices, history)
+        if not history:
+            # No prior turns in the audit log: this sender has never talked to us.
+            reply = reply.model_copy(update={"welcome": WELCOME})
+        return reply
+
+    async def _act(
+        self, business_id: str, text: str, open_invoices: list[Invoice], history: list[Turn]
+    ) -> Reply:
         action = await self._agent.decide(text, open_invoices, history)
 
         if action.kind == "query":
