@@ -7,13 +7,14 @@ without ever dunning the wrong person because it knows when it isn't sure.
 The v1 collections loop is complete: record → remind → chase → reconcile →
 running balance → two-way replies, multi-tenant by the owner's WhatsApp number.
 The app also serves a landing page with a **live in-browser demo** that runs the
-real agent, so anyone can try it without WhatsApp. See the
-[spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md) for
-the full plan, [`docs/architecture.md`](docs/architecture.md) for the design, and
-[`docs/roadmap.md`](docs/roadmap.md) for what's next.
+real agent, so anyone can try it without WhatsApp.
 
-> **Plays:** the product, career, and audience playbooks live in [`PLAYS.md`](PLAYS.md).
-> In a Claude Code session here, run `/play product` (or `career` / `audience`).
+The design rule: if a message is ambiguous, Orviqo asks instead of guessing.
+`"Mama Nkechi never paid for the rice"` gets a question back, not an invented
+amount, and every decision, refusals included, lands in an audit log.
+
+See [`docs/architecture.md`](docs/architecture.md) for the design and
+[`docs/roadmap.md`](docs/roadmap.md) for what's built and what's next.
 
 ## Quickstart
 
@@ -78,22 +79,18 @@ orviqo.api.webhook:create_app`). Open <http://localhost:8000> for the landing
 page and demo. Tests don't need migrations — they build the
 schema from the model metadata directly.
 
-## Week 2
+## What's built
 
-- **Durable ledger ✅** — `SqlAlchemyLedger` (async SQLAlchemy 2.0) behind the
-  `LedgerStore` port. Postgres in prod (`DATABASE_URL=postgresql+asyncpg://…`),
-  SQLite by default for local dev. The API wires it via a FastAPI lifespan.
-- **Audit log ✅** — every decision (recorded *and* refused) is written to
-  `audit_log` with its source message, confidence, and reason — the durable
-  proof that Orviqo never invents a number.
-- **Migrations ✅** — Alembic manages the schema (`migrations/`); the app no
-  longer auto-creates tables at startup. `uv run alembic upgrade head` to apply.
-- **WhatsApp send ✅** — `CloudApiClient` (Meta Graph API) behind the
-  `WhatsAppClient` port; used automatically when credentials are set, else the
-  logging stub. The full inbound→parse→gate→reply loop is closed.
+- **Durable ledger and audit log.** Async SQLAlchemy 2.0 behind ports, Postgres in
+  production, SQLite locally, Alembic migrations. Every decision, recorded or
+  refused, is stored with its source message, confidence and reason.
+- **WhatsApp loop.** Meta Cloud API client behind a `WhatsAppClient` port, with
+  signature-verified webhooks and redelivery dedupe.
+- **Collections.** Owner reminders, consent-based debtor chasing via approved
+  templates (STOP honored), reconciliation from plain messages, running balances.
+- **Offline test suite.** The LLM is faked, so `pytest` runs with no network or key.
 
-Week 2 done. Reminders, reconciliation, debtor-chasing and onboarding followed;
-the current state and backlog live in [`docs/roadmap.md`](docs/roadmap.md).
+Full detail in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Deploy
 

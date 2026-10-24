@@ -11,3 +11,7 @@ build/
 
 # Audience/marketing drafts and media (kept local, not in the public repo)
 content/
+
+# Personal playbooks (kept local, not in the public repo)
+PLAYS.md
+.claude/commands/play.md
