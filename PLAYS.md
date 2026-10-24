@@ -74,13 +74,20 @@ association partnerships, local reseller/agent model, vernacular support.
 - The honesty KPI: "asked-for-clarification vs invented" rate.
 
 **Next steps.**
-- [ ] Finish intake loop, then reminder scheduler (polite cadence, opt-out aware)
+- [x] Finish intake loop, then reminder scheduler (polite cadence, opt-out aware)
 - [ ] Payment reconciliation from transfer/bank SMS alerts
+      (reconciliation from the owner's own messages is shipped; parsing bank
+      alerts is not)
 - [ ] Recruit 5-10 real SMB pilots; instrument the metrics above
+      (blocked on a public WhatsApp number; see docs/roadmap.md)
 - [ ] WhatsApp onboarding flow + first pricing test
-- [ ] Capture a real WhatsApp demo thread (ambiguous message → question)
+      (onboarding shipped: first-run welcome, /start link + QR; pricing not started)
+- [x] Capture a real WhatsApp demo thread (content/audience/assets/orviqo-demo.gif)
 
-**Status:** _not started_
+**Status:** v1 collections loop shipped, plus onboarding and a public landing page
+with a live web demo. Runs on free tiers (Vercel + Neon + Gemini) after Fly
+billing and Anthropic credits ran out. Next blocker for pilots: a real, public
+WhatsApp number (the current setup reaches allowlisted test phones only).
 
 ---
 
