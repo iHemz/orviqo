@@ -161,4 +161,6 @@ metrics card.
 - [ ] Milestone post when first real debt is recovered
 
 **Status:** Post #1 drafted (LinkedIn + X variants) with a real 43s WhatsApp demo GIF
-attached; awaiting publish. Pilot invite deferred by decision.
+attached, plus a link to the live web demo (https://orviqo.williamsab.dev), which shows
+the "asks instead of guessing" moment the GIF doesn't; awaiting publish. Pilot invite
+deferred until WhatsApp can answer the public.
