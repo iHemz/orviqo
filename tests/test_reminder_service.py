@@ -74,3 +74,13 @@ async def test_one_digest_per_business_covering_all_their_debts() -> None:
     assert sorted(to for to, _ in wa.sent) == ["biz1", "biz2"]
     biz1_text = next(text for to, text in wa.sent if to == "biz1")
     assert "Randi" in biz1_text and "Chidi" in biz1_text
+
+
+async def test_never_reminds_a_web_demo_business() -> None:
+    # A demo visitor's business id is not a WhatsApp number; never message it.
+    ledger, reminders, wa = InMemoryLedger(), InMemoryReminderStore(), CapturingWhatsApp()
+    await _add(ledger, "demo:" + "a" * 32, "Randi", 250_000, date(2026, 7, 17))
+    service = ReminderService(ledger, reminders, wa)
+
+    assert await service.run(NOW) == 0
+    assert wa.sent == []

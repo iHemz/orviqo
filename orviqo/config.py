@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     # not a secret: it powers the /start click-to-chat link. Empty = /start is off.
     whatsapp_display_number: str = ""
 
+    # Public web demo caps (messages): per browser session, and per day across all
+    # sessions, so a public page can't exhaust a free-tier LLM quota.
+    demo_session_limit: int = 30
+    demo_daily_limit: int = 300
+
+    # Shared secret the scheduler sends to trigger the collections run
+    # (Vercel Cron sends it as a Bearer token). Empty = the cron route is off.
+    cron_secret: str = ""
+
     # Debtor-chasing: the Meta-approved template used to message a debtor outside
     # the 24h window. Empty = chasing off (the worker skips it) until registered.
     whatsapp_chase_template: str = ""

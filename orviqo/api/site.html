@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orviqo</title>
+<meta name="description" content="An AI receivables clerk for Nigerian small businesses, on WhatsApp. It records who owes you from plain messages, and asks instead of guessing. Try the live demo.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23128c5e'/%3E%3Ctext x='16' y='22' font-family='Arial' font-weight='700' font-size='18' fill='white' text-anchor='middle'%3EO%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --text: #1c1d1a;
+  --muted: #5d6058;
+  --border: #e2e0d8;
+  --accent: #128c5e;
+  --accent-text: #ffffff;
+  --chat-bg: #ece5dd;
+  --bubble-in: #ffffff;
+  --bubble-out: #d9fdd3;
+  --bubble-text: #111b21;
+  --chip-bg: #eef6f2;
+  --chip-text: #0d6b48;
+  --code-bg: #f0eee7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121411;
+    --surface: #1b1e1a;
+    --text: #ebece6;
+    --muted: #a3a79c;
+    --border: #2f332d;
+    --accent: #2fbf86;
+    --accent-text: #0b1a12;
+    --chat-bg: #0f1a17;
+    --bubble-in: #202c33;
+    --bubble-out: #005c4b;
+    --bubble-text: #e9edef;
+    --chip-bg: #183126;
+    --chip-text: #8fe3bd;
+    --code-bg: #232720;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121411;
+  --surface: #1b1e1a;
+  --text: #ebece6;
+  --muted: #a3a79c;
+  --border: #2f332d;
+  --accent: #2fbf86;
+  --accent-text: #0b1a12;
+  --chat-bg: #0f1a17;
+  --bubble-in: #202c33;
+  --bubble-out: #005c4b;
+  --bubble-text: #e9edef;
+  --chip-bg: #183126;
+  --chip-text: #8fe3bd;
+  --code-bg: #232720;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+header.top { padding-top: 20px; padding-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+.brand .mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 0.95rem; }
+.top nav a { color: var(--muted); text-decoration: none; margin-left: 16px; font-size: 0.95rem; }
+.top nav a:hover { color: var(--text); }
+
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 48px; align-items: start; padding-top: 24px; padding-bottom: 56px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 0.9rem; margin: 0 0 8px; }
+h1 { font-size: clamp(2rem, 4.5vw, 2.9rem); line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 16px; }
+.lede { font-size: 1.12rem; color: var(--muted); margin: 0 0 24px; max-width: 34em; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
+.btn { display: inline-block; padding: 10px 18px; border-radius: 999px; font-weight: 600; text-decoration: none; font-size: 0.95rem; border: 1px solid transparent; }
+.btn-primary { background: var(--accent); color: var(--accent-text); }
+.btn-secondary { border-color: var(--border); color: var(--text); background: var(--surface); }
+.try h2 { font-size: 1rem; margin: 0 0 8px; }
+.try ul { margin: 0; padding-left: 20px; color: var(--muted); }
+.try li { margin: 4px 0; }
+.try b { color: var(--text); font-weight: 600; }
+
+/* Phone-style chat */
+.phone { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 22px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.08); display: flex; flex-direction: column; height: 640px; max-height: 80vh; }
+.phone-head { background: var(--accent); color: var(--accent-text); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+.phone-head .avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.22); display: grid; place-items: center; font-weight: 700; }
+.phone-head .who { line-height: 1.2; }
+.phone-head .who small { opacity: 0.85; font-size: 0.78rem; }
+.phone-head button { margin-left: auto; background: rgba(255,255,255,0.18); color: inherit; border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 0.8rem; cursor: pointer; }
+.log { flex: 1; overflow-y: auto; background: var(--chat-bg); padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+.msg { max-width: 85%; padding: 7px 10px; border-radius: 10px; color: var(--bubble-text); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.93rem; line-height: 1.45; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
+.msg.in { background: var(--bubble-in); align-self: flex-start; border-top-left-radius: 2px; }
+.msg.out { background: var(--bubble-out); align-self: flex-end; border-top-right-radius: 2px; }
+.msg.typing { color: var(--muted); font-style: italic; }
+.note { align-self: center; text-align: center; font-size: 0.78rem; color: var(--muted); background: var(--surface); border-radius: 8px; padding: 4px 10px; margin: 4px 0 8px; max-width: 92%; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 10px; background: var(--surface); border-top: 1px solid var(--border); scrollbar-width: none; }
+.chips button { flex: none; border: 0; background: var(--chip-bg); color: var(--chip-text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 0.82rem; cursor: pointer; }
+form.compose { display: flex; gap: 8px; padding: 10px; background: var(--surface); border-top: 1px solid var(--border); }
+form.compose input { flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 999px; padding: 10px 14px; font: inherit; font-size: 0.95rem; }
+form.compose button { border: 0; background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: 0 18px; font: inherit; font-weight: 600; cursor: pointer; }
+form.compose button:disabled { opacity: 0.5; cursor: default; }
+
+section.band { border-top: 1px solid var(--border); padding: 48px 0; }
+section.band h2 { font-size: 1.5rem; letter-spacing: -0.01em; margin: 0 0 8px; }
+section.band > .wrap > p { color: var(--muted); max-width: 44em; margin: 0 0 24px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.card h3 { margin: 0 0 6px; font-size: 1rem; }
+.card p { margin: 0; color: var(--muted); font-size: 0.93rem; }
+code { background: var(--code-bg); border-radius: 5px; padding: 1px 5px; font-size: 0.88em; }
+footer { border-top: 1px solid var(--border); padding: 24px 0 40px; color: var(--muted); font-size: 0.9rem; }
+
+@media (max-width: 880px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .phone { height: 560px; }
+  .top nav a { margin-left: 12px; }
+}
+</style>
+</head>
+<body>
+<header class="wrap top">
+  <div class="brand"><span class="mark">O</span>Orviqo</div>
+  <nav>
+    <a href="#how">How it works</a>
+    <a href="https://github.com/iHemz/orviqo">Code</a>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <p class="eyebrow">AI receivables clerk for Nigerian small businesses</p>
+      <h1>Track who owes you, from a WhatsApp message.</h1>
+      <p class="lede">Tell Orviqo about a debt in your own words. It records it, keeps the running balance as payments come in, and reminds you when debts go overdue. When a message is unclear, it asks instead of guessing, because it is handling someone's money.</p>
+      <div class="btns">
+        <a class="btn btn-primary" href="#demo">Try the live demo</a>
+        {{whatsapp_cta}}
+      </div>
+      <div class="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li><b>Record a debt:</b> "Chidi owes 150k for the generator, due Friday"</li>
+          <li><b>Add a detail later:</b> "the debt is for 2 bags of rice"</li>
+          <li><b>Part payment:</b> "Chidi paid 50k"</li>
+          <li><b>Ask:</b> "what does Chidi owe?" or "who owes me?"</li>
+          <li><b>Be vague, and watch it ask:</b> "Mama Nkechi never paid"</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phone" id="demo" aria-label="Live Orviqo demo">
+      <div class="phone-head">
+        <div class="avatar">O</div>
+        <div class="who"><strong>Orviqo</strong><br><small>Live demo, real AI</small></div>
+        <button type="button" id="reset">Start over</button>
+      </div>
+      <div class="log" id="log" aria-live="polite">
+        <div class="note">This is the real agent and ledger. Your demo is private to this page, nothing is sent to anyone, and it's capped at {{session_limit}} messages.</div>
+      </div>
+      <div class="chips" id="chips">
+        <button type="button">Hi Orviqo</button>
+        <button type="button">Chidi owes 150k for the generator, due Friday</button>
+        <button type="button">Chidi paid 50k</button>
+        <button type="button">What does Chidi owe?</button>
+        <button type="button">Mama Nkechi never paid</button>
+      </div>
+      <form class="compose" id="compose">
+        <input id="text" autocomplete="off" maxlength="500" placeholder="Type a message" aria-label="Message">
+        <button type="submit" id="send">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="band" id="how">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p>Small businesses in Nigeria run on informal credit, and the records live in notebooks and memory. Orviqo works where owners already are: one WhatsApp chat, no app to install, no forms.</p>
+      <div class="grid">
+        <div class="card"><h3>Record</h3><p>Plain messages become structured debts: who, how much, what for, when it's due. Follow-ups update the right debt instead of creating a duplicate.</p></div>
+        <div class="card"><h3>Reconcile</h3><p>"Chidi paid 50k" settles or reduces the debt and shows the running balance. If he has two open debts, it asks which one.</p></div>
+        <div class="card"><h3>Remind and chase</h3><p>A daily digest of overdue debts for the owner, and, with the owner's say-so, a polite WhatsApp reminder to the debtor that honors STOP.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <h2>Built to ask, not guess</h2>
+      <p>The interesting part isn't the model. It's knowing when not to act.</p>
+      <div class="grid">
+        <div class="card"><h3>A rigor gate</h3><p>The service refuses to write a debt without a debtor and an amount, and never takes the LLM's word on balances: amounts in answers come from the database, not the model.</p></div>
+        <div class="card"><h3>An audit trail</h3><p>Every decision, including every refusal, is logged with the source message, confidence and reason. "Why did it do that?" always has an answer.</p></div>
+        <div class="card"><h3>Engineered, not prompted</h3><p>FastAPI, Pydantic AI and Postgres in a ports-and-adapters layout. The test suite runs fully offline with a fake LLM, so the logic around the model is pinned down.</p></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">Built by <a href="https://williamsab.dev/work/orviqo">Williams Balogun</a> · <a href="https://github.com/iHemz/orviqo">Source on GitHub</a></div>
+</footer>
+
+<script>
+(function () {
+  // A fresh demo per page load: the chat on screen always matches what the agent remembers.
+  var log = document.getElementById("log");
+  var form = document.getElementById("compose");
+  var input = document.getElementById("text");
+  var send = document.getElementById("send");
+  var busy = false;
+
+  function newSession() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, "");
+    var s = "";
+    for (var i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16);
+    return s;
+  }
+  var session = newSession();
+
+  function bubble(text, who, extra) {
+    var el = document.createElement("div");
+    el.className = "msg " + who + (extra ? " " + extra : "");
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  function setBusy(b) {
+    busy = b;
+    send.disabled = b;
+  }
+
+  function submit(text) {
+    text = (text || "").trim();
+    if (!text || busy) return;
+    bubble(text, "out");
+    input.value = "";
+    setBusy(true);
+    var typing = bubble("Orviqo is typing…", "in", "typing");
+    fetch("/demo/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: session, text: text })
+    })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (data) {
+        typing.remove();
+        var replies = (data && data.replies) || ["Something went wrong. Please try again."];
+        replies.forEach(function (t) { bubble(t, "in"); });
+      })
+      .catch(function () {
+        typing.remove();
+        bubble("Couldn't reach Orviqo. Check your connection and try again.", "in");
+      })
+      .then(function () { setBusy(false); input.focus(); });
+  }
+
+  form.addEventListener("submit", function (e) { e.preventDefault(); submit(input.value); });
+  document.getElementById("chips").addEventListener("click", function (e) {
+    if (e.target.tagName === "BUTTON") submit(e.target.textContent);
+  });
+  document.getElementById("reset").addEventListener("click", function () {
+    session = newSession();
+    log.querySelectorAll(".msg").forEach(function (m) { m.remove(); });
+    input.focus();
+  });
+})();
+</script>
+</body>
+</html>

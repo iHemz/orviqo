@@ -1,21 +1,28 @@
-"""FastAPI WhatsApp webhook — the composition root for the HTTP entry point.
+"""FastAPI app: the WhatsApp webhook, the public site, and the cron trigger.
 
-The durable ledger needs an async engine with a real lifecycle, so wiring happens
-in a lifespan handler (open engine + ensure schema on startup, dispose on
-shutdown) rather than at import. Run with uvicorn factory mode:
+This is the composition root for the HTTP entry point. The durable ledger needs
+an async engine with a real lifecycle, so wiring happens in a lifespan handler
+(open engine on startup, dispose on shutdown) rather than at import. Run locally
+with uvicorn factory mode:
 
     uvicorn --factory orviqo.api.webhook:create_app --reload
+
+``app`` (bottom) is the module-level instance a serverless host imports (Vercel
+looks for ``app`` at the entrypoint set in pyproject ``[tool.vercel]``).
 """
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query, Request, Response
+from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
+from orviqo import worker
 from orviqo.adapters.db import make_engine
+from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.processed import ProcessedMessageStore
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
@@ -28,9 +35,11 @@ from orviqo.adapters.whatsapp import (
     make_whatsapp_client,
 )
 from orviqo.agents.intake import PydanticAIIntakeAgent
+from orviqo.api.site import router as site_router
 from orviqo.config import bootstrap, settings
 from orviqo.domain.entry import whatsapp_link
 from orviqo.services.debtor_inbox import DebtorInboxService
+from orviqo.services.demo_service import DemoService
 from orviqo.services.intake_service import IntakeService
 
 
@@ -41,13 +50,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Schema is managed by Alembic — run `uv run alembic upgrade head` before starting.
     debtor_store = SqlAlchemyDebtorStore(engine)
     whatsapp = make_whatsapp_client(settings)
+    agent = PydanticAIIntakeAgent()
+    ledger = SqlAlchemyLedger(engine)
+    audit = SqlAlchemyAuditLog(engine)
+    payments = SqlAlchemyPaymentStore(engine)
     app.state.service = IntakeService(
-        agent=PydanticAIIntakeAgent(),
-        ledger=SqlAlchemyLedger(engine),
-        audit=SqlAlchemyAuditLog(engine),
-        payments=SqlAlchemyPaymentStore(engine),
+        agent=agent,
+        ledger=ledger,
+        audit=audit,
+        payments=payments,
         debtors=debtor_store,
         confidence_threshold=settings.intake_confidence_threshold,
+    )
+    # The web demo runs the same intake, except a debtor number typed into it is
+    # held in memory only: never stored, so never chased or routed as a real debtor.
+    app.state.demo = DemoService(
+        intake=IntakeService(
+            agent=agent,
+            ledger=ledger,
+            audit=audit,
+            payments=payments,
+            debtors=InMemoryDebtorStore(),
+            confidence_threshold=settings.intake_confidence_threshold,
+        ),
+        audit=audit,
+        session_limit=settings.demo_session_limit,
+        daily_limit=settings.demo_daily_limit,
     )
     app.state.inbox = DebtorInboxService(debtor_store, whatsapp)
     app.state.processed = SqlAlchemyProcessedMessageStore(engine)
@@ -61,11 +89,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Orviqo — receivables agent", lifespan=lifespan)
+    app.include_router(site_router)
 
     @app.get("/health")
     def health() -> dict:
-        """Liveness check for the platform load balancer (Fly)."""
+        """Liveness check for the platform's health checks."""
         return {"status": "ok"}
+
+    @app.get("/cron/collections")
+    async def collections(authorization: str = Header("")) -> Response:
+        """One collections pass (owner digests + debtor chases), for a daily scheduler.
+
+        Vercel Cron calls this with ``Authorization: Bearer <CRON_SECRET>``; anything
+        else is refused, so the public can't trigger WhatsApp sends.
+        """
+        if not settings.cron_secret:
+            return Response("Cron is not configured.", status_code=503)
+        if not secrets.compare_digest(authorization, f"Bearer {settings.cron_secret}"):
+            return Response(status_code=401)
+        reminded, chased = await worker.run_once()
+        return Response(f"sent {reminded} digest(s), {chased} chase(s)", media_type="text/plain")
 
     @app.get("/start")
     def start() -> Response:
@@ -114,3 +157,6 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     return app
+
+
+app = create_app()

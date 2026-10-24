@@ -118,3 +118,19 @@ async def test_no_op_when_no_template_is_configured() -> None:
 
     assert await _service(ledger, debtors, chases, wa, template="").run(NOW) == 0
     assert wa.templates == []
+
+
+async def test_never_chases_from_a_web_demo_business() -> None:
+    # Even if a demo debtor somehow had a saved number, a demo must never message a phone.
+    ledger, debtors, chases, wa = (
+        InMemoryLedger(),
+        InMemoryDebtorStore(),
+        InMemoryChaseStore(),
+        CapturingWhatsApp(),
+    )
+    demo = "demo:" + "a" * 32
+    await _overdue(ledger, demo, "Chidi", 80_000)
+    await debtors.upsert(demo, "Chidi", "08031234567")
+
+    assert await _service(ledger, debtors, chases, wa).run(NOW) == 0
+    assert wa.templates == []
