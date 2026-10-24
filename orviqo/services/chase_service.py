@@ -18,6 +18,7 @@ from orviqo.adapters.chases import ChaseStore
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.whatsapp import WhatsAppClient
+from orviqo.domain.demo import is_demo
 from orviqo.domain.models import Debtor, Invoice
 
 _MIN_INTERVAL_HOURS = 20
@@ -60,6 +61,8 @@ class ChaseService:
 
         sent = 0
         for invoice in await self._ledger.overdue(now.date()):
+            if is_demo(invoice.business_id):
+                continue  # a demo must never message a real phone
             debtor = await self._debtors.find(invoice.business_id, invoice.debtor_name)
             if debtor is None or debtor.opted_out:
                 continue  # no contact, or they said STOP

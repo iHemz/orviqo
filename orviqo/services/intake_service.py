@@ -120,17 +120,23 @@ class IntakeService:
     async def handle_message(self, business_id: str, text: str) -> Reply:
         open_invoices = await self._ledger.open_invoices(business_id)
         history = await self._recent_turns(business_id)
-        reply = await self._act(business_id, text, open_invoices, history)
-        if not history:
-            # No prior turns in the audit log: this sender has never talked to us.
-            reply = reply.model_copy(update={"welcome": WELCOME})
-        return reply
+        action = await self._agent.decide(text, open_invoices, history)
+        if history:
+            return await self._act(business_id, text, action, open_invoices)
+
+        # No prior turns in the audit log: this sender has never talked to us.
+        if action.kind == "clarify":
+            # Nothing to act on yet (e.g. "Hi"): the welcome already says what to
+            # send, so it *is* the reply, rather than a welcome plus a question.
+            reply = Reply(text=WELCOME)
+            await self._record(business_id, text, Decision.asked, action, reply.text, None)
+            return reply
+        reply = await self._act(business_id, text, action, open_invoices)
+        return reply.model_copy(update={"welcome": WELCOME})
 
     async def _act(
-        self, business_id: str, text: str, open_invoices: list[Invoice], history: list[Turn]
+        self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
     ) -> Reply:
-        action = await self._agent.decide(text, open_invoices, history)
-
         if action.kind == "query":
             return await self._answer(business_id, text, action, open_invoices)
         if action.kind == "payment":

@@ -17,6 +17,7 @@ from datetime import UTC, date, datetime, timedelta
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.reminders import ReminderStore
 from orviqo.adapters.whatsapp import WhatsAppClient
+from orviqo.domain.demo import is_demo
 from orviqo.domain.models import Invoice
 
 _MIN_INTERVAL_HOURS = 20
@@ -53,6 +54,8 @@ class ReminderService:
         """Send due digests. Returns how many owners were reminded."""
         by_business: dict[str, list[Invoice]] = defaultdict(list)
         for inv in await self._ledger.overdue(now.date()):
+            if is_demo(inv.business_id):
+                continue  # a web-demo visitor is not a WhatsApp user to remind
             by_business[inv.business_id].append(inv)
 
         sent = 0

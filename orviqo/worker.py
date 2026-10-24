@@ -1,10 +1,11 @@
 """Collections worker — the scheduled process that chases overdue debts.
 
-Runs on Fly as a second process (see fly.toml ``[processes]``): a long-running
-loop that, once a day, (1) sends each owner a digest of their overdue invoices
-and (2) chases each debtor with a saved contact directly.
+Once a day it (1) sends each owner a digest of their overdue invoices and (2)
+chases each debtor with a saved contact directly. On Vercel a daily Cron Job hits
+``/cron/collections``, which calls ``run_once``; on a container host (Fly) it runs
+as a long-lived second process instead (see fly.toml ``[processes]``).
 
-    python -m orviqo.worker            # loop forever (the Fly worker process)
+    python -m orviqo.worker            # loop forever (container worker process)
     python -m orviqo.worker --once     # a single pass, then exit (cron / manual)
 """
 
@@ -21,7 +22,7 @@ from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_reminders import SqlAlchemyReminderStore
 from orviqo.adapters.whatsapp import make_whatsapp_client
-from orviqo.config import bootstrap, settings
+from orviqo.config import settings
 from orviqo.services.chase_service import ChaseService
 from orviqo.services.reminder_service import ReminderService
 
@@ -29,8 +30,10 @@ log = logging.getLogger("orviqo.worker")
 
 
 async def run_once() -> tuple[int, int]:
-    """One collections pass: returns (owner digests sent, debtors chased)."""
-    bootstrap()
+    """One collections pass: returns (owner digests sent, debtors chased).
+
+    Needs no LLM, so it doesn't require an API key: only the database and WhatsApp.
+    """
     engine = make_engine(settings.database_url)
     whatsapp = make_whatsapp_client(settings)
     ledger = SqlAlchemyLedger(engine)

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import insert, select
+from datetime import datetime
+
+from sqlalchemy import func, insert, select
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -48,6 +50,16 @@ class SqlAlchemyAuditLog:
         async with self._engine.connect() as conn:
             rows = list(await conn.execute(stmt))
         return [self._to_entry(row) for row in reversed(rows)]
+
+    async def count_since(self, business_prefix: str, since: datetime) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(audit_log)
+            .where(audit_log.c.business_id.startswith(business_prefix, autoescape=True))
+            .where(audit_log.c.created_at >= since)
+        )
+        async with self._engine.connect() as conn:
+            return (await conn.execute(stmt)).scalar_one()
 
     @staticmethod
     def _to_entry(row: Row) -> AuditEntry:

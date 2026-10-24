@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "WhatsApp-native receivables agent for Nigerian SMBs"
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic-ai>=0.0.14",
+    "pydantic-ai-slim[anthropic,google]>=2.9",
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
     "fastapi>=0.110",
@@ -26,6 +26,14 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
 ]
+
+# Vercel: serve the FastAPI ``app`` from this module, and apply migrations at build
+# time (the Vercel counterpart of fly.toml's release_command).
+[tool.vercel]
+entrypoint = "orviqo.api.webhook:app"
+
+[tool.vercel.scripts]
+build = "alembic upgrade head"
 
 [build-system]
 requires = ["hatchling"]

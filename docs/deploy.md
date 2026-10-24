@@ -1,161 +1,178 @@
-# Deploying to Fly.io
+# Deploying Orviqo
 
-Orviqo runs as a persistent container on [Fly.io](https://fly.io) — the app's
-lifespan wiring (engine pool, HTTP client, startup DI) runs exactly as designed,
-no serverless workarounds. This is just the **web service** for now; the
-scheduled reminder worker (Week 3) becomes a second process later.
+Orviqo runs entirely on free tiers, no card required:
 
-## Prerequisites
+| Piece | Service | Free tier notes |
+|---|---|---|
+| App (webhook, site, demo, cron) | **Vercel Hobby** | FastAPI runs as one function; one cron run per day. Hobby is for non-commercial use, fine for a showcase or pilot. |
+| Database | **Neon** Postgres | Compute suspends after a few idle minutes; the first request after a lull takes about a second longer. |
+| LLM | **Gemini** via Google AI Studio | Rate-limited per minute and per day; over the limit returns 429, never a bill. On the free tier Google may use prompts to improve its products, so revisit before real owners' data flows through it. |
+| Messaging | **WhatsApp Cloud API** | Owner-initiated chats are free. See [WhatsApp](#4-whatsapp-optional) for the test-number limit. |
 
-- `flyctl` installed and logged in (`fly auth login`)
-- A **managed Postgres** — do not run Fly's DIY unmanaged Postgres as a solo
-  founder. Use **Fly Managed Postgres** (`fly mpg …`) or **Neon** / **Supabase**.
+A container host (Fly.io) is still supported; see [the end](#alternative-a-container-host-flyio).
 
-## 1. Create the app
+## 1. Collect the values
 
-```bash
-cd orviqo
-fly launch --no-deploy      # uses the committed fly.toml; pick a unique app name
-```
+**Gemini key.** Create one at <https://aistudio.google.com/apikey> (sign in with
+a Google account; no billing setup).
 
-If `orviqo` is taken globally, Fly will offer another name — accept it (it just
-changes your `*.fly.dev` subdomain).
-
-## 2. Provision Postgres and get the URL
-
-Create a managed Postgres and grab its connection string. Then **convert it to
-the async form** — this is the #1 thing that trips people up:
+**Database URL.** From the Neon console (*Connect*), then convert it to the
+async form, the #1 thing that trips people up:
 
 - SQLAlchemy async needs the **`postgresql+asyncpg://`** scheme (not `postgres://`).
-- `asyncpg` rejects the libpq-style **`?sslmode=require`** param. Managed
-  providers require SSL, so use **`?ssl=require`** instead.
+- `asyncpg` rejects the libpq-style **`?sslmode=require`**; use **`?ssl=require`**.
 
 ```
-# what the provider gives you:
+# what Neon gives you:
 postgres://user:pass@host/orviqo?sslmode=require
 
 # what DATABASE_URL must be:
 postgresql+asyncpg://user:pass@host/orviqo?ssl=require
 ```
 
-> **Connection pooling:** serverless-style pooling isn't needed here (one warm
-> machine = one connection pool), but if you later run many machines, use the
-> provider's **pooled** host (Neon's pooler / PgBouncer endpoint).
-
-## 3. Set secrets
-
-Never bake these into the image — Fly injects them at runtime.
+**Cron secret.** Any random string of 16+ characters:
 
 ```bash
-fly secrets set \
-  ANTHROPIC_API_KEY="sk-ant-..." \
-  DATABASE_URL="postgresql+asyncpg://user:pass@host/orviqo?ssl=require" \
-  WHATSAPP_VERIFY_TOKEN="orviqo-verify-..." \
-  WHATSAPP_ACCESS_TOKEN="EAAG..." \
-  WHATSAPP_PHONE_NUMBER_ID="1234567890" \
-  WHATSAPP_API_VERSION="v21.0"
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-## 4. Deploy
+## 2. Create the Vercel project
 
-```bash
-fly deploy
-```
+1. Sign in at <https://vercel.com> with GitHub (Hobby plan).
+2. **Add New → Project**, import `iHemz/orviqo`. Vercel detects FastAPI from
+   `pyproject.toml` (`[tool.vercel] entrypoint = "orviqo.api.webhook:app"`).
+3. Before deploying, add **Environment Variables**:
 
-Fly builds the `Dockerfile`, then runs the **release command**
-(`alembic upgrade head`) against your Postgres to create the tables, then starts
-the app. Watch it: `fly logs`.
+| Name | Value |
+|---|---|
+| `GOOGLE_API_KEY` | your Gemini key |
+| `DATABASE_URL` | the `postgresql+asyncpg://…?ssl=require` URL |
+| `CRON_SECRET` | the random string |
+| `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | optional, see step 4 |
+| `WHATSAPP_DISPLAY_NUMBER` | optional, turns on `/start` and the "Chat on WhatsApp" button |
 
-## 5. Point Meta at it
+4. **Deploy.** The build installs dependencies from `uv.lock`, then runs
+   `alembic upgrade head` (the `[tool.vercel.scripts] build` step) against
+   `DATABASE_URL`, so the schema is always current. Every later push to `main`
+   redeploys automatically.
 
-Your stable URL is `https://<app>.fly.dev`.
+> Preview deployments (other branches) use the same environment variables by
+> default, so they migrate and write to the same database. Fine for a solo
+> project; scope `DATABASE_URL` to Production in the Vercel dashboard if you
+> want previews kept off it.
+
+## 3. Check it
+
+Your URL is `https://<project>.vercel.app`.
+
+- `/health` → `{"status":"ok"}`
+- `/` → the landing page. Send a message in the demo: a reply proves the
+  database and the Gemini key both work. "The AI behind this demo is busy"
+  means Gemini rejected the call; check the key, then the function logs
+  (*Project → Logs*).
+- `/start` → redirects to WhatsApp (503 until `WHATSAPP_DISPLAY_NUMBER` is set).
+
+## 4. WhatsApp (optional)
+
+The web demo needs none of this. Point Meta at the app:
 
 | Meta webhook field | value |
 |---|---|
-| Callback URL | `https://<app>.fly.dev/webhook` |
-| Verify token | the same `WHATSAPP_VERIFY_TOKEN` you set as a secret |
+| Callback URL | `https://<project>.vercel.app/webhook` |
+| Verify token | the same `WHATSAPP_VERIFY_TOKEN` you set in Vercel |
 
-Health check: `https://<app>.fly.dev/health` → `{"status":"ok"}`.
+Then subscribe to the **messages** webhook field.
 
-Then subscribe to the **messages** webhook field, and (while the Meta app is
-unpublished) add your own number as a tester. Send a WhatsApp to the test number
-— the app parses it, records or asks, and replies.
+- **Access token.** The dashboard's temporary token expires in about 24h.
+  Create a permanent one (free) under *Business Settings → System users*, with
+  `whatsapp_business_messaging` permission.
+- **The test number only reaches up to 5 allowlisted phones.** That's enough
+  for you to demo it, not for the public. Letting anyone message Orviqo needs a
+  real phone number registered on the WhatsApp Business Account (a SIM that
+  isn't already on WhatsApp), the Meta app switched to Live (needs a privacy
+  policy URL), and then Meta Business Verification to raise the messaging
+  limits.
 
-## 6. Turn on the public entry point
+### Proactive messages need approved templates
 
-People can't search WhatsApp for a business number, so new owners arrive via
-`https://<app>.fly.dev/start`, which redirects to a `wa.me` chat with Orviqo
-prefilled with "Hi Orviqo". Their first message triggers the first-run welcome.
-Until the number is set, `/start` returns 503.
-
-```bash
-fly secrets set WHATSAPP_DISPLAY_NUMBER="+234 803 123 4567"   # the Orviqo business number
-```
-
-Share `/start` (not a raw `wa.me` link) so the number can change without
-reprinting anything. Generate its QR code (SVG + PNG) for a landing page or socials:
-
-```bash
-uv run --with segno python tools/entry_qr.py   # writes content/audience/assets/orviqo-start-qr.*
-```
-
-## The reminder worker
-
-`fly deploy` starts **two** process groups (`fly.toml` `[processes]`): the `web`
-service (the webhook) and a `worker` (`python -m orviqo.worker`) — a daily loop
-that sends each owner a digest of their overdue debts. Test a single pass:
-
-```bash
-fly ssh console -C "python -m orviqo.worker --once"   # or, locally: make worker
-```
-
-> ⚠️ **Proactive sends need an approved template.** WhatsApp forbids free-form
-> business→user messages outside a 24-hour window of the user's last message. A
-> scheduled reminder is almost always outside that window, so it must go out as a
-> **Meta-approved message template**. Until you register one and point the sender
-> at it, the worker's digest only lands for owners who messaged recently (inside
-> 24h). Registering the template is a Meta-dashboard step; the digest text in
-> `reminder_service.py` maps to it.
+WhatsApp forbids free-form business→user messages outside a 24-hour window of
+the user's last message. A scheduled reminder is almost always outside that
+window, so it must go out as a **Meta-approved message template**. Until you
+register one, the daily owner digest only lands for owners who messaged in the
+last 24h. Template messages sent outside that window are also what WhatsApp
+charges for, so this is the first part of Orviqo that isn't free.
 
 ### Chasing debtors directly
 
-The worker's second pass (`ChaseService`) messages *debtors* who have a saved
-contact and an overdue debt. Because a debtor is virtually never inside the 24h
-window, this **requires its own approved template** — a debtor-facing one, e.g.:
+The collections run's second pass (`ChaseService`) messages *debtors* who have
+a saved contact and an overdue debt. A debtor is virtually never inside the 24h
+window, so this **requires its own approved template**, e.g.:
 
 ```
 Hi {{1}}, a friendly reminder that {{2}} for {{3}} was due {{4}}.
 Kindly arrange payment. Reply STOP to opt out.
 ```
 
-Register it as a **Utility** template, then set its name (and language) as
-secrets — until `WHATSAPP_CHASE_TEMPLATE` is set, the chase pass is a safe no-op:
+Register it as a **Utility** template, then set `WHATSAPP_CHASE_TEMPLATE` (and
+`WHATSAPP_TEMPLATE_LANG`, default `en_US`). Until it's set, the chase pass is a
+safe no-op. The four body variables are filled, in order, with the debtor's
+name, the amount (₦), the item, and the due date (see `_chase_params` in
+`chase_service.py`). Inbound routing honors STOP automatically: a known
+debtor's reply is handled by `DebtorInboxService` (opt-out or acknowledge) and
+never reaches owner intake.
+
+## 5. The daily collections run
+
+`vercel.json` schedules `GET /cron/collections` once a day at 08:00 UTC (09:00
+in Lagos). Vercel sends `Authorization: Bearer <CRON_SECRET>`; any other caller
+gets a 401, and without `CRON_SECRET` the route returns 503. Each run sends the
+owner digests, then the debtor chases. Web-demo businesses are always skipped.
+Hobby runs land somewhere within the scheduled hour.
+
+Run a pass by hand:
 
 ```bash
-fly secrets set \
-  WHATSAPP_CHASE_TEMPLATE="orviqo_debt_reminder" \
-  WHATSAPP_TEMPLATE_LANG="en_US"
+curl -H "Authorization: Bearer $CRON_SECRET" https://<project>.vercel.app/cron/collections
+# or locally, against DATABASE_URL: make worker
 ```
 
-The four body variables are filled, in order, with the debtor's name, the amount
-(₦), the item, and the due date (see `_chase_params` in `chase_service.py`).
-Inbound routing honors STOP automatically: a known debtor's reply is handled by
-`DebtorInboxService` (opt-out or acknowledge) and never reaches owner intake.
+## 6. The public entry point
 
-## Notes & honest caveats
+People can't search WhatsApp for a business number, so new owners arrive via
+`https://<project>.vercel.app/start`, which redirects to a `wa.me` chat with
+Orviqo prefilled with "Hi Orviqo". Their first message triggers the welcome.
+Set `WHATSAPP_DISPLAY_NUMBER` (the business number as people dial it) to turn
+it on. Share `/start`, not a raw `wa.me` link, so the number can change without
+reprinting anything. Generate its QR code (SVG + PNG) for a landing page or
+socials:
 
-- **Not verifiable from a laptop without Docker + a Fly account.** The app code
-  and tests are green; the Docker build and Fly deploy you validate on the first
-  `fly deploy`. If the build fails, it's almost always the `DATABASE_URL` format
-  (see step 2).
-- **Cost:** `min_machines_running = 1` keeps the webhook warm (no cold-start on
-  an incoming message). Set it to `0` in `fly.toml` to save money while idle, at
-  the cost of a few seconds' cold start on the first message after a lull.
-- **Temporary WhatsApp token:** the Meta dashboard's initial access token expires
-  (~24h). Swap in a permanent token before any real pilot.
-- **Region:** `primary_region = "fra"` (Frankfurt), co-located with a Neon
-  Postgres in EU Central. Counter-intuitive for a Nigerian product, but correct:
-  the SMB never talks to the app directly (they go through WhatsApp), so what
-  matters is app↔DB (every request) and app↔Anthropic (the parse) — both are
-  faster from Frankfurt than Johannesburg, and Neon has no Africa region. Put the
-  DB and the app in the **same region**.
+```bash
+uv run --with segno python tools/entry_qr.py --url https://<project>.vercel.app/start
+```
+
+## The web demo's limits
+
+The landing page demo runs the real agent against the real database, as a
+private `demo:<session>` business per page load. Debtor numbers typed into it
+are never stored, and the collections run skips demo businesses, so the demo
+can't message anyone. Two caps protect the free Gemini quota, both counted from
+the audit log: `DEMO_SESSION_LIMIT` messages per session (default 30) and
+`DEMO_DAILY_LIMIT` across all sessions per day (default 300).
+
+## Alternative: a container host (Fly.io)
+
+`Dockerfile` and `fly.toml` still work for a persistent container: the `web`
+process serves the app and a `worker` process runs `python -m orviqo.worker`
+(a daily loop) instead of the cron route. Fly now needs a paid account.
+
+```bash
+fly launch --no-deploy        # uses the committed fly.toml
+fly secrets set GOOGLE_API_KEY="..." DATABASE_URL="postgresql+asyncpg://..." \
+  WHATSAPP_VERIFY_TOKEN="..." WHATSAPP_ACCESS_TOKEN="..." WHATSAPP_PHONE_NUMBER_ID="..."
+fly deploy                    # release_command runs the migrations
+```
+
+The **Fly Deploy** GitHub workflow is manual (*Actions → Fly Deploy → Run
+workflow*) and needs a `FLY_API_TOKEN` repository secret. Region note: put the
+app and the database in the same region; what matters is app↔DB and app↔LLM
+latency, not distance to the owner, who only ever talks to WhatsApp.

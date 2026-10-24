@@ -83,10 +83,12 @@ transaction / outbox is a later hardening.)
 ## Configuration & the composition root
 
 `config.bootstrap()` is called once per entry point (never at import). It fails
-fast on a missing key and exports it to `os.environ` so Pydantic AI's Anthropic
-client can see a key that only lived in `.env`. Modules stay import-safe:
-importing anything has no side effects and needs no credentials — which is what
-lets the tests import freely.
+fast when the configured model's provider key is missing (Gemini or Anthropic,
+from `ORVIQO_INTAKE_MODEL`) and exports it to `os.environ` so Pydantic AI's
+provider client can see a key that only lived in `.env`. Modules stay
+import-safe: importing anything needs no credentials and opens no connections
+(the module-level `app` in `api/webhook.py` is just an unstarted FastAPI
+instance) — which is what lets the tests import freely.
 
 ## Roadmap
 
@@ -94,12 +96,13 @@ The week-by-week plan lives in the
 [spec](https://github.com/iHemz/ideas/blob/main/orviqo-receivables-agent.md).
 Week 2 ✅: durable ledger · audit log · Alembic migrations · WhatsApp Cloud API
 client. Conversational intake ✅ (create/update/query/clarify). Reminder engine ✅
-— `ReminderService` + a scheduled `worker` process (2nd Fly process) send owners
+— `ReminderService` + a daily collections run (Vercel Cron → `/cron/collections`,
+or a `worker` process on a container host) send owners
 a daily overdue digest, on the same ports. Reconciliation ✅ — a `payment` intent
 settles or reduces an invoice from plain messages ("Chidi paid 50k", "Randi
 cleared her debt"), writing each payment to a durable `payments` ledger.
 Debtor-chasing ✅ — owner-attested consent: a `contact` intent saves a debtor's
-number, `ChaseService` (2nd worker pass) messages debtors with overdue debts via
+number, `ChaseService` (the run's 2nd pass) messages debtors with overdue debts via
 an approved template, and inbound routing honors STOP (opt-out) before owner
 intake ever sees the message. Chasing is gated on `WHATSAPP_CHASE_TEMPLATE`;
 unset, the chase pass is a safe no-op. A debtor's reply is relayed to the owner

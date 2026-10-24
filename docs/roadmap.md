@@ -4,7 +4,7 @@ A durable record of what's built, what's next, and the open questions — so wor
 can resume later without re-deriving context. The narrative architecture lives in
 [architecture.md](architecture.md); this is the backlog.
 
-## Shipped — v1 collections loop (live on Fly + Neon)
+## Shipped — v1 collections loop (free tiers: Vercel + Neon + Gemini)
 
 The core loop is complete and hardened: **record → remind → chase → reconcile →
 running balance → two-way replies**, multi-tenant by the owner's WhatsApp number.
@@ -15,25 +15,41 @@ running balance → two-way replies**, multi-tenant by the owner's WhatsApp numb
   messages; ambiguity is asked, never guessed; overpayment is surfaced.
 - **Running balances** — partial payments show cumulative progress ("₦50,000 of
   ₦80,000 paid, ₦30,000 still outstanding"); debtor queries show it too.
-- **Owner reminders** — daily digest of overdue debts (worker process).
+- **Owner reminders** — daily digest of overdue debts (Vercel Cron →
+  `/cron/collections`; a worker process on a container host).
 - **Debtor-chasing** — owner-attested consent: save a debtor's number
   (`contact` intent), chase overdue debts via an approved template, honor STOP.
 - **Owner-notification** — a chased debtor's reply is relayed to the owner.
 - **Inbound idempotency** — redelivered webhooks are deduped by message id.
+- **Landing page + live web demo** — `/` serves a page whose chat runs the real
+  agent and ledger as a private `demo:<session>` business, so anyone (recruiters
+  included) can try it without WhatsApp. Demo debtor numbers are never stored and
+  the collections run skips demo businesses; per-session and daily caps protect
+  the free LLM quota.
+- **Free hosting** — moved off paid Fly + Anthropic to Vercel Hobby, Neon and
+  Gemini's free tier; the LLM provider is one env var (see
+  [deploy.md](deploy.md)).
 
 ## The big gap — distribution & onboarding
 
-**Today only the owner (you) can meaningfully use it, and there is no way for a
-real SMB owner to discover or start using Orviqo.** This is the top thing to solve
-before the product is "real". Details in the section below; concrete backlog:
+**Anyone can now try Orviqo on the web, but WhatsApp isn't open to the public
+yet.** The setup was made with the Meta app unpublished and the owner's own
+phone added as a tester, and Meta's test number only reaches up to 5
+allowlisted phones. The onboarding pieces are built; the remaining gap is a
+real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 
 - [x] **First-run onboarding.** A sender with no prior turns gets a welcome (what
-      Orviqo does + example messages) sent ahead of the normal reply; their first
-      message is still acted on.
+      Orviqo does + example messages). If their first message is actionable it is
+      still handled after the welcome; a bare "Hi" gets the welcome alone.
 - [x] **A shareable entry point.** `/start` redirects to a `wa.me` chat prefilled
       with "Hi Orviqo"; `tools/entry_qr.py` makes its QR code. Live once
-      `WHATSAPP_DISPLAY_NUMBER` is set (see [deploy.md](deploy.md)). Still needs a
-      home: a landing page or socials to put the link and QR on.
+      `WHATSAPP_DISPLAY_NUMBER` is set (see [deploy.md](deploy.md)). The landing
+      page shows a "Chat on WhatsApp" button when it is.
+- [ ] **A real WhatsApp number.** Register a number that isn't on WhatsApp yet
+      (a spare SIM) on the WhatsApp Business Account, switch the Meta app to
+      Live (needs a privacy policy URL), and swap in a permanent System User
+      token (the dashboard token in local `.env` expired 2026-07-12). Until
+      then, WhatsApp is a demo for allowlisted phones only.
 - [ ] **Messaging limits & verification.** The WhatsApp number starts at a low
       tier (a few hundred unique users/day). Scaling needs Meta Business
       Verification and climbing the messaging tiers via good quality ratings.

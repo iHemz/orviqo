@@ -107,7 +107,9 @@ debtors = Table(
 
 
 def make_engine(url: str) -> AsyncEngine:
-    return create_async_engine(url)
+    # pre_ping: a serverless Postgres (Neon) drops idle connections when its compute
+    # suspends, so check a pooled connection before use instead of failing on it.
+    return create_async_engine(url, pool_pre_ping=True)
 
 
 async def create_schema(engine: AsyncEngine) -> None:

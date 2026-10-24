@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from orviqo.adapters.db import create_schema, make_engine
@@ -95,3 +96,25 @@ async def test_recent_returns_last_n_in_chronological_order(audit: SqlAlchemyAud
     recent = await audit.recent("biz1", 3)
 
     assert [e.message for e in recent] == ["m2", "m3", "m4"]
+
+
+async def test_counts_recent_entries_by_business_prefix(audit: SqlAlchemyAuditLog) -> None:
+    now = datetime.now(UTC)
+    for business_id, created_at in [
+        ("demo:aaa", now - timedelta(hours=1)),
+        ("demo:bbb", now - timedelta(minutes=5)),
+        ("demo:ccc", now - timedelta(days=2)),  # too old
+        ("2348031234567", now),  # not a demo business
+    ]:
+        await audit.record(
+            AuditEntry(
+                business_id=business_id,
+                message="hi",
+                decision=Decision.asked,
+                confidence=0.3,
+                reason="?",
+                created_at=created_at,
+            )
+        )
+
+    assert await audit.count_since("demo:", now - timedelta(days=1)) == 2

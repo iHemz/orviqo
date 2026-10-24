@@ -1,4 +1,4 @@
-"""Conversation-aware intake agent (Pydantic AI, the cheap Haiku model).
+"""Conversation-aware intake agent (Pydantic AI, a cheap fast model).
 
 Given the new message plus context — the sender's open invoices and the recent
 conversation — the agent decides whether to create a new invoice, update an
@@ -82,10 +82,10 @@ def _format_context(open_invoices: list[Invoice], history: list[Turn]) -> str:
 
 
 class PydanticAIIntakeAgent:
-    """An ``IntakeAgent`` that calls Claude via Pydantic AI.
+    """An ``IntakeAgent`` that calls the configured LLM via Pydantic AI.
 
     The agent is built in ``__init__`` (not at import), so importing this module
-    has no side effects. Construction needs ``ANTHROPIC_API_KEY`` in the
+    has no side effects. Construction needs the provider's API key in the
     environment — Pydantic AI infers the provider eagerly — which
     ``config.bootstrap()`` guarantees before any entry point builds the agent.
     """
