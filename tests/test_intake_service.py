@@ -21,8 +21,12 @@ from orviqo.services.intake_service import WELCOME, IntakeService
 
 async def test_create_records_and_audits(make_agent) -> None:
     action = IntakeAction(
-        kind="create", debtor_name="Chidi", amount_ngn=150_000, item="generator",
-        due_date=date(2026, 7, 17), confidence=0.98,
+        kind="create",
+        debtor_name="Chidi",
+        amount_ngn=150_000,
+        item="generator",
+        due_date=date(2026, 7, 17),
+        confidence=0.98,
     )
     ledger, audit = InMemoryLedger(), InMemoryAuditLog()
     service = IntakeService(
@@ -166,9 +170,7 @@ async def test_query_unknown_debtor_says_so(make_agent) -> None:
 async def test_agent_receives_open_invoices_and_history_as_context(make_agent) -> None:
     # The fix for the re-interrogation bug: on the 2nd message the agent must see
     # the invoice recorded by the 1st, and the 1st exchange.
-    action = IntakeAction(
-        kind="create", debtor_name="Randi", amount_ngn=250_000, confidence=0.98
-    )
+    action = IntakeAction(kind="create", debtor_name="Randi", amount_ngn=250_000, confidence=0.98)
     agent = make_agent(action)
     service = IntakeService(
         agent, InMemoryLedger(), InMemoryAuditLog(), InMemoryPaymentStore(), InMemoryDebtorStore()
@@ -291,9 +293,7 @@ async def test_payment_for_unknown_debtor_asks(make_agent) -> None:
 
 async def test_contact_saves_the_debtors_number(make_agent) -> None:
     debtors, audit = InMemoryDebtorStore(), InMemoryAuditLog()
-    action = IntakeAction(
-        kind="contact", debtor_name="Chidi", phone="08031234567", confidence=0.95
-    )
+    action = IntakeAction(kind="contact", debtor_name="Chidi", phone="08031234567", confidence=0.95)
     service = IntakeService(
         make_agent(action), InMemoryLedger(), audit, InMemoryPaymentStore(), debtors
     )
@@ -337,25 +337,42 @@ async def test_first_message_from_new_sender_gets_welcome(make_agent) -> None:
     assert len(await ledger.open_invoices("new-owner")) == 1
 
 
-async def test_first_greeting_gets_the_welcome_alone(make_agent) -> None:
-    # "Hi" gives the agent nothing to act on. The welcome already says what to send,
-    # so it is the whole reply, not a welcome followed by a clarifying question.
-    action = IntakeAction(kind="clarify", clarify="Who owes you?", confidence=0.3)
-    audit = InMemoryAuditLog()
-    service = IntakeService(
-        make_agent(action),
+def _service(agent, audit=None) -> IntakeService:
+    return IntakeService(
+        agent,
         InMemoryLedger(),
-        audit,
+        audit or InMemoryAuditLog(),
         InMemoryPaymentStore(),
         InMemoryDebtorStore(),
     )
 
+
+async def test_first_greeting_gets_the_welcome_alone(make_agent) -> None:
+    # "Hi" has nothing to act on, and the welcome already says what to send, so it
+    # is the whole reply. Later greetings get a short nudge, not the welcome again.
+    audit = InMemoryAuditLog()
+    service = _service(make_agent(IntakeAction(kind="greeting", confidence=0.9)), audit)
+
     first = await service.handle_message("biz1", "Hi Orviqo")
-    second = await service.handle_message("biz1", "someone owes me")
+    second = await service.handle_message("biz1", "good morning")
 
     assert (first.text, first.welcome) == (WELCOME, None)
-    assert (second.text, second.welcome) == ("Who owes you?", None)
-    assert [e.decision for e in await audit.entries("biz1")] == [Decision.asked] * 2
+    assert second.welcome is None and second.text.startswith("Hi! Tell me about a debt")
+    assert [e.decision for e in await audit.entries("biz1")] == [Decision.answered] * 2
+
+
+async def test_first_vague_debt_gets_the_welcome_and_the_question(make_agent) -> None:
+    # "Mama Nkechi never paid" as a first message: welcome them, AND ask how much,
+    # so the rigor gate is visible from the very first exchange.
+    action = IntakeAction(
+        kind="clarify", clarify="How much does Mama Nkechi owe you?", confidence=0.4
+    )
+    service = _service(make_agent(action))
+
+    reply = await service.handle_message("biz1", "Mama Nkechi never paid")
+
+    assert reply.welcome == WELCOME
+    assert reply.text == "How much does Mama Nkechi owe you?"
 
 
 def _prior_turn(business_id: str) -> AuditEntry:
