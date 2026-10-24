@@ -52,6 +52,10 @@ Choose exactly one `kind`:
 - "clarify": you genuinely cannot tell what to record and cannot resolve it from
   the open invoices or recent conversation. Ask ONE short question.
 
+A "query" must be a QUESTION. A statement that someone owes or hasn't paid
+("Mama Nkechi never paid", "Tunde still owes me") is never a query: record it
+if the amount is known (here or in context), otherwise clarify and ask how much.
+
 Rules:
 - If you have a debtor name AND an amount, ACT (create or update) right away. Do
   NOT ask the owner to confirm details they already gave you ("just to confirm…"
@@ -138,7 +142,9 @@ class PydanticAIIntakeAgent:
             build_model(model or settings.orviqo_intake_model),
             output_type=IntakeAction,
             system_prompt=_SYSTEM_PROMPT,
-            model_settings={"timeout": _ATTEMPT_TIMEOUT_S},
+            # Thinking off: this is a quick classification a person is waiting on,
+            # and the current Gemini Flash spends many seconds reasoning by default.
+            model_settings={"timeout": _ATTEMPT_TIMEOUT_S, "thinking": False},
         )
 
         @self._agent.system_prompt
