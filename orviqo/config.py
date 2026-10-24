@@ -9,12 +9,36 @@ which read ``os.environ``) can see a key that otherwise only lived in ``.env``.
 from __future__ import annotations
 
 import os
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
+
+
+def async_database_url(url: str) -> str:
+    """Turn the Postgres URL a provider hands out into one SQLAlchemy async accepts.
+
+    Neon (and most hosts) give ``postgres(ql)://...?sslmode=require&channel_binding=
+    require``, the libpq form. The async driver, asyncpg, needs the
+    ``postgresql+asyncpg://`` scheme and rejects both query options (``connect()
+    got an unexpected keyword argument 'sslmode'``), so: swap the scheme, map
+    ``sslmode`` to asyncpg's ``ssl``, and drop ``channel_binding``. Other URLs
+    (SQLite, an already-async URL) pass through unchanged.
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in ("postgres", "postgresql", "postgresql+asyncpg"):
+        return url
+    query = []
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if key == "sslmode":
+            query.append(("ssl", value))
+        elif key != "channel_binding":
+            query.append((key, value))
+    return urlunsplit(parts._replace(scheme="postgresql+asyncpg", query=urlencode(query)))
 
 
 # The API key each supported model provider needs, by Pydantic AI model prefix.
@@ -39,7 +63,7 @@ class Settings(BaseSettings):
     intake_confidence_threshold: float = 0.5
 
     # Ledger database. SQLite by default (zero setup); prod sets Postgres via
-    # DATABASE_URL, e.g. postgresql+asyncpg://user:pass@host:5432/orviqo
+    # DATABASE_URL. Paste the provider's URL as-is: it is converted for asyncpg.
     database_url: str = "sqlite+aiosqlite:///./orviqo.db"
 
     whatsapp_verify_token: str = ""
@@ -64,6 +88,11 @@ class Settings(BaseSettings):
     # the 24h window. Empty = chasing off (the worker skips it) until registered.
     whatsapp_chase_template: str = ""
     whatsapp_template_lang: str = "en_US"
+
+    @field_validator("database_url")
+    @classmethod
+    def _async_database_url(cls, url: str) -> str:
+        return async_database_url(url)
 
     def llm_key(self) -> tuple[str, str]:
         """The (env var name, value) of the API key the intake model needs."""

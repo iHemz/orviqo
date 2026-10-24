@@ -16,19 +16,12 @@ A container host (Fly.io) is still supported; see [the end](#alternative-a-conta
 **Gemini key.** Create one at <https://aistudio.google.com/apikey> (sign in with
 a Google account; no billing setup).
 
-**Database URL.** From the Neon console (*Connect*), then convert it to the
-async form, the #1 thing that trips people up:
-
-- SQLAlchemy async needs the **`postgresql+asyncpg://`** scheme (not `postgres://`).
-- `asyncpg` rejects the libpq-style **`?sslmode=require`**; use **`?ssl=require`**.
-
-```
-# what Neon gives you:
-postgres://user:pass@host/orviqo?sslmode=require
-
-# what DATABASE_URL must be:
-postgresql+asyncpg://user:pass@host/orviqo?ssl=require
-```
+**Database URL.** From the Neon console (*Connect*), pasted as-is, e.g.
+`postgresql://user:pass@host/orviqo?sslmode=require&channel_binding=require`.
+The async driver (asyncpg) can't use that libpq form directly, so the app
+converts it at startup (`async_database_url` in `config.py`): the scheme becomes
+`postgresql+asyncpg://`, `sslmode` becomes `ssl`, and `channel_binding` is
+dropped. Migrations get the same conversion.
 
 **Cron secret.** Any random string of 16+ characters:
 
@@ -46,7 +39,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | Name | Value |
 |---|---|
 | `GOOGLE_API_KEY` | your Gemini key |
-| `DATABASE_URL` | the `postgresql+asyncpg://…?ssl=require` URL |
+| `DATABASE_URL` | the Neon connection string, as-is |
 | `CRON_SECRET` | the random string |
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | optional, see step 4 |
 | `WHATSAPP_DISPLAY_NUMBER` | optional, turns on `/start` and the "Chat on WhatsApp" button |
