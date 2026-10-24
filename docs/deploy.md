@@ -81,6 +81,24 @@ Then subscribe to the **messages** webhook field, and (while the Meta app is
 unpublished) add your own number as a tester. Send a WhatsApp to the test number
 — the app parses it, records or asks, and replies.
 
+## 6. Turn on the public entry point
+
+People can't search WhatsApp for a business number, so new owners arrive via
+`https://<app>.fly.dev/start`, which redirects to a `wa.me` chat with Orviqo
+prefilled with "Hi Orviqo". Their first message triggers the first-run welcome.
+Until the number is set, `/start` returns 503.
+
+```bash
+fly secrets set WHATSAPP_DISPLAY_NUMBER="+234 803 123 4567"   # the Orviqo business number
+```
+
+Share `/start` (not a raw `wa.me` link) so the number can change without
+reprinting anything. Generate its QR code (SVG + PNG) for a landing page or socials:
+
+```bash
+uv run --with segno python tools/entry_qr.py   # writes content/audience/assets/orviqo-start-qr.*
+```
+
 ## The reminder worker
 
 `fly deploy` starts **two** process groups (`fly.toml` `[processes]`): the `web`
