@@ -13,13 +13,14 @@ looks for ``app`` at the entrypoint set in pyproject ``[tool.vercel]``).
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, Query, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from orviqo import worker
 from orviqo.adapters.db import make_engine
@@ -31,9 +32,11 @@ from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
 from orviqo.adapters.sql_processed import SqlAlchemyProcessedMessageStore
 from orviqo.adapters.whatsapp import (
+    LoggingWhatsAppClient,
     WhatsAppClient,
     iter_text_messages,
     make_whatsapp_client,
+    valid_signature,
 )
 from orviqo.agents.intake import PydanticAIIntakeAgent
 from orviqo.api.site import router as site_router
@@ -42,6 +45,8 @@ from orviqo.domain.entry import whatsapp_link
 from orviqo.services.debtor_inbox import DebtorInboxService
 from orviqo.services.demo_service import DemoService
 from orviqo.services.intake_service import IntakeService
+
+log = logging.getLogger("orviqo.webhook")
 
 
 @asynccontextmanager
@@ -137,12 +142,24 @@ def create_app() -> FastAPI:
         return Response(status_code=403)
 
     @app.post("/webhook")
-    async def inbound(request: Request) -> dict:
+    async def inbound(request: Request) -> Response:
         service: IntakeService = request.app.state.service
         inbox: DebtorInboxService = request.app.state.inbox
         processed: ProcessedMessageStore = request.app.state.processed
         whatsapp: WhatsAppClient = request.app.state.whatsapp
-        payload = await request.json()
+        body = await request.body()
+        # Anyone can POST here, and each message costs an LLM call and may send a
+        # WhatsApp reply to whatever number the payload claims, so only Meta's
+        # signed callbacks get through.
+        if settings.whatsapp_app_secret:
+            signature = request.headers.get("X-Hub-Signature-256", "")
+            if not valid_signature(settings.whatsapp_app_secret, body, signature):
+                return Response(status_code=401)
+        elif not isinstance(whatsapp, LoggingWhatsAppClient):
+            # Real credentials but no way to verify callers: refuse, never fail open.
+            log.error("WHATSAPP_APP_SECRET is not set; refusing unverified webhook")
+            return Response("Webhook verification is not configured.", status_code=503)
+        payload = json.loads(body)
         for msg in iter_text_messages(payload):
             if await processed.seen(msg.id):
                 continue  # redelivered webhook — already handled
@@ -158,7 +175,7 @@ def create_app() -> FastAPI:
             # Mark only after a clean handle: a failure above leaves it unmarked so
             # WhatsApp's retry reprocesses it, rather than dropping the message.
             await processed.mark(msg.id)
-        return {"status": "ok"}
+        return JSONResponse({"status": "ok"})
 
     return app
 
