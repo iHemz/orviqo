@@ -8,3 +8,6 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Audience/marketing drafts and media (kept local, not in the public repo)
+content/
