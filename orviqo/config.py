@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""
     whatsapp_api_version: str = "v21.0"
+    # Meta app secret (App settings → Basic). Verifies that webhook POSTs really
+    # come from Meta. Required whenever real WhatsApp credentials are set.
+    whatsapp_app_secret: str = ""
 
     # The Orviqo business number as people dial it (e.g. +234 803 123 4567). Public,
     # not a secret: it powers the /start click-to-chat link. Empty = /start is off.

@@ -41,7 +41,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `GOOGLE_API_KEY` | your Gemini key |
 | `DATABASE_URL` | the Neon connection string, as-is |
 | `CRON_SECRET` | the random string |
-| `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | optional, see step 4 |
+| `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` | optional, see step 4 |
 | `WHATSAPP_DISPLAY_NUMBER` | optional, turns on `/start` and the "Chat on WhatsApp" button |
 
 4. **Deploy.** The build installs dependencies from `uv.lock`, then runs
@@ -75,6 +75,13 @@ The web demo needs none of this. Point Meta at the app:
 | Verify token | the same `WHATSAPP_VERIFY_TOKEN` you set in Vercel |
 
 Then subscribe to the **messages** webhook field.
+
+- **App secret (required).** Set `WHATSAPP_APP_SECRET` to the Meta app's secret
+  (*App settings → Basic → App secret*). Meta signs every webhook POST with it
+  (`X-Hub-Signature-256`), and the app rejects anything unsigned or forged with
+  a 401, so nobody else can feed it messages, spend the LLM quota, or make it
+  send WhatsApp replies. With an access token set but no app secret, the webhook
+  refuses every POST (503) rather than run unverified.
 
 - **Access token.** The dashboard's temporary token expires in about 24h.
   Create a permanent one (free) under *Business Settings → System users*, with

@@ -7,13 +7,20 @@ published). Point it at local or the deployed app.
     uv run python tools/simulate_inbound.py "Chidi owes 150k, due Friday"
     uv run python tools/simulate_inbound.py "..." --url https://orviqo.fly.dev/webhook
     uv run python tools/simulate_inbound.py "..." --from 2348164443163   # who gets the reply
+
+Requests are signed like Meta's (``X-Hub-Signature-256``) with WHATSAPP_APP_SECRET
+from the environment / ``.env``, so they pass the webhook's verification.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
+import json
 
 import httpx
+from orviqo.config import settings
 
 
 def build_payload(text: str, sender: str) -> dict:
@@ -55,7 +62,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    response = httpx.post(args.url, json=build_payload(args.message, args.sender), timeout=30)
+    body = json.dumps(build_payload(args.message, args.sender)).encode()
+    headers = {"Content-Type": "application/json"}
+    if settings.whatsapp_app_secret:
+        digest = hmac.new(settings.whatsapp_app_secret.encode(), body, hashlib.sha256)
+        headers["X-Hub-Signature-256"] = "sha256=" + digest.hexdigest()
+    response = httpx.post(args.url, content=body, headers=headers, timeout=30)
     print("HTTP", response.status_code, response.text)
 
 

@@ -77,12 +77,14 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 
 - [ ] **Observability.** Structured logs / error alerting for worker + webhook
       failures (currently `logging.exception` only).
-- [ ] **Webhook signature verification.** Verify Meta's `X-Hub-Signature-256` so
-      only genuine Meta callbacks are processed.
+- [x] **Webhook signature verification.** Meta's `X-Hub-Signature-256` is checked
+      against `WHATSAPP_APP_SECRET`; unsigned or forged POSTs get a 401, and with
+      real credentials but no secret the webhook fails closed (503).
 - [ ] **Worker cadence.** The chase/reminder interval is a fixed 24h loop; consider
       cron-style scheduling and per-owner quiet hours.
-- [ ] **Automated integration test for the webhook route** (idempotency + routing)
-      — currently the pieces are unit-tested and the route is verified live.
+- [ ] **Automated integration test for the webhook route** — signature checks and
+      intake routing now go through the real route (`tests/test_webhook_signature.py`);
+      redelivery dedup and debtor routing through the route are still untested.
 
 ## How multi-tenancy works today (reference)
 

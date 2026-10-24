@@ -11,6 +11,8 @@ otherwise the logging stub — so the app runs locally without WhatsApp set up.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, NamedTuple, Protocol
@@ -30,6 +32,18 @@ class InboundMessage(NamedTuple):
     sender: str
     text: str
     id: str
+
+
+def valid_signature(app_secret: str, body: bytes, header: str) -> bool:
+    """Whether ``header`` (``X-Hub-Signature-256``) proves Meta sent ``body``.
+
+    Meta signs every webhook POST with an HMAC-SHA256 of the raw request body,
+    keyed by the app secret, as ``sha256=<hex>``. Compared in constant time.
+    """
+    if not app_secret or not header.startswith("sha256="):
+        return False
+    expected = hmac.new(app_secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(header.removeprefix("sha256="), expected)
 
 
 def iter_text_messages(payload: dict) -> Iterator[InboundMessage]:
