@@ -13,7 +13,7 @@ from orviqo.adapters.audit import InMemoryAuditLog
 from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.ledger import InMemoryLedger
 from orviqo.adapters.payments import InMemoryPaymentStore
-from orviqo.domain.audit import Decision
+from orviqo.domain.audit import AuditEntry, Decision
 from orviqo.domain.intake import IntakeAction
 from orviqo.domain.models import ParsedInvoice
 from orviqo.services.intake_service import WELCOME, IntakeService
@@ -59,6 +59,7 @@ async def test_update_modifies_existing_invoice(make_agent) -> None:
 async def test_clarify_asks_and_records_nothing(make_agent) -> None:
     action = IntakeAction(kind="clarify", clarify="Who owes you, and how much?", confidence=0.3)
     ledger, audit = InMemoryLedger(), InMemoryAuditLog()
+    await audit.record(_prior_turn("biz1"))  # a returning sender, past the welcome
     service = IntakeService(
         make_agent(action), ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore()
     )
@@ -68,7 +69,7 @@ async def test_clarify_asks_and_records_nothing(make_agent) -> None:
     assert reply.recorded_invoice_id is None
     assert reply.text == "Who owes you, and how much?"
     assert await ledger.open_invoices("biz1") == []
-    assert (await audit.entries("biz1"))[0].decision is Decision.asked
+    assert (await audit.entries("biz1"))[-1].decision is Decision.asked
 
 
 async def test_create_without_amount_is_refused(make_agent) -> None:
@@ -336,18 +337,32 @@ async def test_first_message_from_new_sender_gets_welcome(make_agent) -> None:
     assert len(await ledger.open_invoices("new-owner")) == 1
 
 
-async def test_returning_sender_gets_no_welcome(make_agent) -> None:
+async def test_first_greeting_gets_the_welcome_alone(make_agent) -> None:
+    # "Hi" gives the agent nothing to act on. The welcome already says what to send,
+    # so it is the whole reply, not a welcome followed by a clarifying question.
     action = IntakeAction(kind="clarify", clarify="Who owes you?", confidence=0.3)
+    audit = InMemoryAuditLog()
     service = IntakeService(
         make_agent(action),
         InMemoryLedger(),
-        InMemoryAuditLog(),
+        audit,
         InMemoryPaymentStore(),
         InMemoryDebtorStore(),
     )
 
-    first = await service.handle_message("biz1", "hi")
+    first = await service.handle_message("biz1", "Hi Orviqo")
     second = await service.handle_message("biz1", "someone owes me")
 
-    assert first.welcome is not None
-    assert second.welcome is None
+    assert (first.text, first.welcome) == (WELCOME, None)
+    assert (second.text, second.welcome) == ("Who owes you?", None)
+    assert [e.decision for e in await audit.entries("biz1")] == [Decision.asked] * 2
+
+
+def _prior_turn(business_id: str) -> AuditEntry:
+    return AuditEntry(
+        business_id=business_id,
+        message="Hi",
+        decision=Decision.asked,
+        confidence=0.3,
+        reason=WELCOME,
+    )
