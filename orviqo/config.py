@@ -1,9 +1,9 @@
 """Application configuration — the single source of truth for settings.
 
 Values load from the environment (and a local ``.env``). ``bootstrap()`` is the
-composition root's first call: it fails fast when the API key is missing and
-exports it so downstream libraries (Pydantic AI's Anthropic client, which reads
-``os.environ``) can see a key that otherwise only lived in ``.env``.
+composition root's first call: it fails fast when the configured model's API key
+is missing and exports it so downstream libraries (Pydantic AI's provider clients,
+which read ``os.environ``) can see a key that otherwise only lived in ``.env``.
 """
 
 from __future__ import annotations
@@ -17,14 +17,21 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
+# The API key each supported model provider needs, by Pydantic AI model prefix.
+_PROVIDER_KEYS = {"anthropic": "anthropic_api_key", "google": "google_api_key"}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Only the key for the configured provider is required.
     anthropic_api_key: str = ""
+    google_api_key: str = ""  # Gemini, from Google AI Studio (has a free tier)
 
-    # Pydantic AI provider strings. Haiku is cheap+fast for parsing;
-    # Opus 4.8 is the reasoning model for collections/reconciliation (Week 3+).
-    orviqo_intake_model: str = "anthropic:claude-haiku-4-5"
+    # Pydantic AI provider strings. Gemini Flash is the default: it has a free
+    # tier and handles the structured intake decision well. Any provider in
+    # _PROVIDER_KEYS works, e.g. anthropic:claude-haiku-4-5.
+    orviqo_intake_model: str = "google:gemini-flash-latest"
     orviqo_reasoning_model: str = "anthropic:claude-opus-4-8"
 
     # Safety net: below this confidence a "create" falls back to asking. The agent
@@ -49,11 +56,24 @@ class Settings(BaseSettings):
     whatsapp_chase_template: str = ""
     whatsapp_template_lang: str = "en_US"
 
-    def require_anthropic_key(self) -> None:
-        if not self.anthropic_api_key:
+    def llm_key(self) -> tuple[str, str]:
+        """The (env var name, value) of the API key the intake model needs."""
+        provider = self.orviqo_intake_model.split(":", 1)[0]
+        field = _PROVIDER_KEYS.get(provider)
+        if field is None:
+            supported = ", ".join(_PROVIDER_KEYS)
             raise ConfigError(
-                "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key, "
-                "or export ANTHROPIC_API_KEY in your shell."
+                f"Unsupported model provider '{provider}' in ORVIQO_INTAKE_MODEL "
+                f"(supported: {supported})."
+            )
+        return field.upper(), getattr(self, field)
+
+    def require_llm_key(self) -> None:
+        name, value = self.llm_key()
+        if not value:
+            raise ConfigError(
+                f"{name} is not set (needed for {self.orviqo_intake_model}). Copy "
+                f".env.example to .env and add your key, or export {name} in your shell."
             )
 
 
@@ -66,6 +86,7 @@ def bootstrap() -> Settings:
     Call once, at the start of an entry point (CLI, API factory) — never at
     import time, so importing a module stays free of side effects.
     """
-    settings.require_anthropic_key()
-    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
+    settings.require_llm_key()
+    name, value = settings.llm_key()
+    os.environ.setdefault(name, value)
     return settings
