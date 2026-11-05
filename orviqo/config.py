@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     whatsapp_chase_template: str = ""
     whatsapp_template_lang: str = "en_US"
 
+    # The business an `orviqo-mcp` stdio process serves: the owner's WhatsApp
+    # number, the same id the webhook files their messages under. Empty = it won't start.
+    orviqo_mcp_business_id: str = ""
+
     @field_validator("database_url")
     @classmethod
     def _async_database_url(cls, url: str) -> str:

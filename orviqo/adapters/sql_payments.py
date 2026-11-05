@@ -35,6 +35,20 @@ class SqlAlchemyPaymentStore:
         async with self._engine.connect() as conn:
             return int((await conn.execute(stmt)).scalar_one())
 
+    async def totals_paid(self, invoice_ids: list[str]) -> dict[str, int]:
+        totals = dict.fromkeys(invoice_ids, 0)
+        if not invoice_ids:
+            return totals
+        stmt = (
+            select(payments.c.invoice_id, func.sum(payments.c.amount_ngn))
+            .where(payments.c.invoice_id.in_(invoice_ids))
+            .group_by(payments.c.invoice_id)
+        )
+        async with self._engine.connect() as conn:
+            for invoice_id, paid in await conn.execute(stmt):
+                totals[invoice_id] = int(paid)
+        return totals
+
     @staticmethod
     def _to_payment(row: Row) -> Payment:
         return Payment(

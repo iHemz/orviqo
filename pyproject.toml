@@ -14,10 +14,12 @@ dependencies = [
     "asyncpg>=0.29",
     "aiosqlite>=0.20",
     "alembic>=1.18.5",
+    "mcp>=1.28",
 ]
 
 [project.scripts]
 orviqo = "orviqo.cli:main"
+orviqo-mcp = "orviqo.mcp.server:main"
 
 [dependency-groups]
 dev = [
@@ -49,6 +51,10 @@ extend-exclude = ["migrations"]  # Alembic-generated; not hand-linted
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# `src` includes orviqo/, so orviqo/mcp would pass for the MCP SDK; it is a dependency.
+known-third-party = ["mcp"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

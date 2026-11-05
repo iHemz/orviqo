@@ -67,12 +67,14 @@ class SqlAlchemyLedger:
             result = await conn.execute(stmt)
             return [self._to_invoice(row) for row in result]
 
-    async def overdue(self, as_of: date) -> list[Invoice]:
+    async def overdue(self, as_of: date, business_id: str | None = None) -> list[Invoice]:
         stmt = select(invoices).where(
             invoices.c.status == InvoiceStatus.open.value,
             invoices.c.due_date.is_not(None),
             invoices.c.due_date < as_of,
         )
+        if business_id is not None:
+            stmt = stmt.where(invoices.c.business_id == business_id)
         async with self._engine.connect() as conn:
             result = await conn.execute(stmt)
             return [self._to_invoice(row) for row in result]

@@ -11,7 +11,8 @@ WhatsApp client — without touching it.
         delivery                 application            domain
   ┌───────────────────┐      ┌──────────────────┐   ┌──────────────┐
   │ api/webhook.py     │────▶ │ services/         │──▶│ domain/       │
-  │ cli.py             │      │   intake_service  │   │   models.py   │
+  │ mcp/server.py      │      │   intake_service  │   │   models.py   │
+  │ cli.py             │      │                   │   │              │
   └───────────────────┘      └────────┬─────────┘   └──────────────┘
         │  wires concrete adapters     │ depends on PORTS only
         ▼                              ▼
@@ -33,7 +34,7 @@ WhatsApp client — without touching it.
 | **Ports** | `agents/base.py`, `adapters/*` Protocols | Interfaces the application depends on. |
 | **Application** | `orviqo.services` | Use-cases. Depends on ports, never on concretes. |
 | **Adapters** | `orviqo.adapters`, `agents/intake.py` | Concrete I/O: LLM, storage, WhatsApp. |
-| **Delivery** | `orviqo.api`, `orviqo.cli` | Entry points. The **composition root** — the only place concretes are wired to the service. |
+| **Delivery** | `orviqo.api`, `orviqo.mcp`, `orviqo.cli` | Entry points. The **composition root** — the only place concretes are wired to the service. |
 
 ## Why the ports (and why not more)
 
