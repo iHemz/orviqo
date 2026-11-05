@@ -43,13 +43,57 @@ orviqo/
 ├── services/      intake_service.py — the rigor gate (record vs. ask)
 ├── adapters/      ledger + sql_ledger (LedgerStore) · audit + sql_audit (AuditLog) · db · whatsapp
 ├── api/           webhook.py — FastAPI app (webhook, /start, cron) · site.py — landing page + demo
+├── mcp/           server.py — MCP server: the ledger as tools for Claude and other MCP clients
 ├── cli.py         terminal entry point
 └── config.py      settings + bootstrap()
 tests/             offline suite (fakes for the LLM — no network)
 ```
 
-Dependencies point inward; only the delivery layer (`api`, `cli`) wires concrete
+Dependencies point inward; only the delivery layer (`api`, `mcp`, `cli`) wires concrete
 adapters to the service. See [`docs/architecture.md`](docs/architecture.md).
+
+## Use it from Claude
+
+`orviqo-mcp` is an MCP server over one business's ledger, so an owner working in
+Claude (or any MCP client) can ask "who owes me more than ₦50k?" or say "Chidi
+paid 20k" and their assistant calls Orviqo's tools. It runs on your machine over
+stdio and needs no LLM key. Writes go through the same rigor gate as WhatsApp: a
+payment that matches two debts comes back `ambiguous` and nothing is written.
+
+It needs two settings: `ORVIQO_MCP_BUSINESS_ID`, the owner's WhatsApp number
+(the id their WhatsApp messages are filed under), and `DATABASE_URL`. Apply
+migrations to that database first (`uv run alembic upgrade head`).
+
+> **Warning:** pointing `DATABASE_URL` at the production Neon database means real
+> writes to that owner's ledger. Try it against local SQLite first.
+
+Claude Code, from the repo root:
+
+```bash
+claude mcp add orviqo   -e ORVIQO_MCP_BUSINESS_ID=2348031234567   -e DATABASE_URL=sqlite+aiosqlite:///./orviqo.db   -- uv run --directory "$PWD" orviqo-mcp
+```
+
+Claude Desktop (`claude_desktop_config.json`; use the absolute path to this repo):
+
+```json
+{
+  "mcpServers": {
+    "orviqo": {
+      "command": "uv",
+      "args": ["run", "--directory", "/absolute/path/to/orviqo", "orviqo-mcp"],
+      "env": {
+        "ORVIQO_MCP_BUSINESS_ID": "2348031234567",
+        "DATABASE_URL": "sqlite+aiosqlite:////absolute/path/to/orviqo/orviqo.db"
+      }
+    }
+  }
+}
+```
+
+Any other stdio MCP client (Cursor, VS Code, an agent framework) takes the same
+command and env. Web connectors (claude.ai, ChatGPT) need a hosted HTTP server
+with per-owner auth, which is planned. Tools, results and design are in
+[`docs/mcp.md`](docs/mcp.md).
 
 ## Models
 
