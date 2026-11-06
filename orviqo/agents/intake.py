@@ -65,8 +65,18 @@ Choose exactly one `kind`:
 - "reminder_reply": ONLY when "Reminders this sender received" is listed below.
   The sender is answering a reminder about money THEY owe another business
   ("I'll pay Friday", "I've sent it", "I paid 20k already", "I don't owe that").
-  Set `reminder_id` to that reminder's id. Set nothing else: Orviqo passes the
-  message on to that business; it is never recorded in anyone's ledger.
+  Set `reminder_id` to that reminder's id, and `reply_type`: "promise" when they
+  say WHEN they will pay ("I'll pay Friday", "by month end": put the date in
+  `promise_date`), "dispute" when they say they don't owe it or the amount is
+  wrong ("I don't owe that", "it was 30k not 50k", "I already paid you"), else
+  "other". Set nothing else: Orviqo passes the message on to that business; it is
+  never recorded in anyone's ledger.
+- "promise": the OWNER says one of their debtors will pay by a date ("Chidi says
+  he'll pay Friday", "Ada promised to pay on the 15th"). Set `debtor_name`, the
+  matching `invoice_id`, and `promise_date`. Not a payment: nothing was paid yet.
+- "resume": the owner wants reminders to a debtor started again after a promise
+  or dispute ("keep chasing Chidi", "Chidi's dispute is sorted, remind him
+  again"). Set `debtor_name` (and `invoice_id` if one debt is meant).
 
 The sender can be someone's debtor AND an owner with debtors of their own: traders
 owe each other all the time. A reminder they received is about THEIR debt; their

@@ -12,12 +12,14 @@ already decided the action (the MCP server, whose caller fills a typed schema).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from datetime import date
 
 from pydantic import BaseModel
 
 from orviqo.adapters.audit import AuditLog
 from orviqo.adapters.businesses import BusinessStore, InMemoryBusinessStore
+from orviqo.adapters.chases import ChaseStore, InMemoryChaseStore
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.payments import PaymentStore
@@ -25,7 +27,7 @@ from orviqo.agents.base import IntakeAgent
 from orviqo.domain.audit import AuditEntry, Decision
 from orviqo.domain.business import BusinessProfile, identify
 from orviqo.domain.intake import IntakeAction, Reminder, Turn
-from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
+from orviqo.domain.models import Hold, Invoice, InvoiceStatus, ParsedInvoice
 
 _HISTORY_TURNS = 6
 _FALLBACK_ASK = "Sorry, I didn't fully get that — who owes you, how much, and by when?"
@@ -75,11 +77,12 @@ class Reply(BaseModel):
     relay: Relay | None = None
 
 
-def _summary(invoice: Invoice) -> str:
+def _summary(invoice: Invoice, hold: Hold | None = None) -> str:
     due = invoice.due_date.isoformat() if invoice.due_date else "no due date"
+    held = f", {hold.describe()}" if hold else ""
     return (
         f"{invoice.debtor_name} owes ₦{invoice.amount_ngn:,} "
-        f"for {invoice.item or 'unspecified'} ({due}) [#{invoice.id}]"
+        f"for {invoice.item or 'unspecified'} ({due}{held}) [#{invoice.id}]"
     )
 
 
@@ -87,15 +90,10 @@ def _confirmation(invoice: Invoice, verb: str) -> str:
     return f"{verb}: {_summary(invoice)}."
 
 
-def _answer_query(open_invoices: list[Invoice], debtor_name: str | None) -> str:
-    if debtor_name:
-        matches = [i for i in open_invoices if i.debtor_name.lower() == debtor_name.lower()]
-        if not matches:
-            return f"You have no open debt recorded for {debtor_name}."
-        return "; ".join(_summary(i) for i in matches)
+def _answer_query(open_invoices: list[Invoice], holds: dict[str, Hold]) -> str:
     if not open_invoices:
         return "You have no open debts recorded."
-    lines = "\n".join(f"- {_summary(i)}" for i in open_invoices)
+    lines = "\n".join(f"- {_summary(i, holds.get(i.id))}" for i in open_invoices)
     return f"You have {len(open_invoices)} open debt(s):\n{lines}"
 
 
@@ -168,6 +166,8 @@ class IntakeService:
         debtors: DebtorStore,
         confidence_threshold: float = 0.5,
         businesses: BusinessStore | None = None,
+        chases: ChaseStore | None = None,
+        today: Callable[[], date] = date.today,
     ) -> None:
         self._agent = agent
         self._ledger = ledger
@@ -176,6 +176,8 @@ class IntakeService:
         self._debtors = debtors
         self._threshold = confidence_threshold
         self._businesses = businesses or InMemoryBusinessStore()
+        self._chases = chases or InMemoryChaseStore()  # holds: promises and disputes
+        self._today = today
 
     async def handle_message(
         self, business_id: str, text: str, reminders: Sequence[Reminder] = ()
@@ -216,7 +218,7 @@ class IntakeService:
         """
         if open_invoices is None:
             # Only the kinds that match against the ledger pay for reading it.
-            needs_ledger = action.kind in ("query", "payment", "update")
+            needs_ledger = action.kind in ("query", "payment", "update", "promise", "resume")
             open_invoices = await self._ledger.open_invoices(business_id) if needs_ledger else []
         if action.kind == "greeting":
             reply = Reply(text=_GREETING_REPLY)
@@ -236,6 +238,10 @@ class IntakeService:
             return await self._apply_contact(business_id, source, action)
         if action.kind == "update":
             return await self._apply_update(business_id, source, action, open_invoices)
+        if action.kind == "promise":
+            return await self._apply_promise(business_id, source, action, open_invoices)
+        if action.kind == "resume":
+            return await self._apply_resume(business_id, source, action, open_invoices)
         if action.kind == "create" and self._can_record(action):
             return await self._apply_create(business_id, source, action)
         return await self._ask(business_id, source, action)
@@ -309,21 +315,88 @@ class IntakeService:
         if last and last[0].decision is Decision.asked:
             # Answering our "is that about the reminder?": pass on what they first said too.
             said = f'"{last[0].message}" (then: "{text}")'
-        relay = Relay(
-            to=reminder.business_id,
-            text=(
-                f"{reminder.debtor_name} replied to your reminder about ₦{reminder.amount_ngn:,}"
-                f" for {reminder.item or 'their order'}: {said}"
-            ),
+        relay_text = (
+            f"{reminder.debtor_name} replied to your reminder about ₦{reminder.amount_ngn:,}"
+            f" for {reminder.item or 'their order'}: {said}"
         )
         # Say exactly where it went: a misread (their own customer paid them) shows at once.
         ack = (
             f"Thanks, I've passed that on to {_creditor(reminder)}, who reminded you about "
             f"₦{reminder.amount_ngn:,} for {reminder.item or 'your order'}."
         )
+        hold = self._reply_hold(reminder, action, text)
+        if hold is not None:
+            await self._chases.hold(hold)
+            if hold.reason == "promise":
+                relay_text += (
+                    f"\nThey promised to pay by {hold.until:%a %d %b}, so I'll hold reminders "
+                    "to them until then."
+                )
+                ack += f" No more reminders about it before {hold.until:%a %d %b}."
+            else:
+                relay_text += (
+                    "\nThey dispute it, so I've paused reminders about it. Once it's sorted, "
+                    f'say "keep chasing {reminder.debtor_name}".'
+                )
+                ack += " I've paused reminders about it while you sort it out with them."
         if not reminder.quoted:
             ack += " If it was about your own customers instead, tell me who paid."
-        reply = Reply(text=ack, relay=relay)
+        reply = Reply(text=ack, relay=Relay(to=reminder.business_id, text=relay_text))
+        return await self._record(business_id, text, Decision.noted, action, reply)
+
+    def _reply_hold(self, reminder: Reminder, action: IntakeAction, text: str) -> Hold | None:
+        """A reply that promises a (future) date, or disputes the debt, pauses chasing."""
+        if action.reply_type == "dispute":
+            return Hold(invoice_id=reminder.invoice_id, reason="dispute", note=text[:500])
+        promised = action.promise_date
+        if action.reply_type == "promise" and promised and promised >= self._today():
+            return Hold(
+                invoice_id=reminder.invoice_id, reason="promise", until=promised, note=text[:500]
+            )
+        return None
+
+    async def _apply_promise(
+        self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
+    ) -> Reply:
+        """The owner says a debtor will pay by a date: hold reminders until then."""
+        candidates = _payment_candidates(action, open_invoices)
+        if not candidates:
+            return await self._ask(business_id, text, action, not_found=True)
+        if len(candidates) > 1:
+            return await self._ask_which(business_id, text, action, candidates)
+        target = candidates[0]
+        promised = action.promise_date
+        if promised is None or promised < self._today():
+            question = f"By when will {target.debtor_name} pay?"
+            return await self._record(
+                business_id, text, Decision.asked, action, Reply(text=question)
+            )
+        await self._chases.hold(
+            Hold(invoice_id=target.id, reason="promise", until=promised, note=text[:500])
+        )
+        reply = Reply(
+            text=(
+                f"Noted: {target.debtor_name} will pay ₦{target.amount_ngn:,} by "
+                f"{promised:%a %d %b}. I'll hold reminders to them until then, and pick "
+                f"up again if it's still unpaid. [#{target.id}]"
+            ),
+            invoice=target,
+        )
+        return await self._record(business_id, text, Decision.noted, action, reply)
+
+    async def _apply_resume(
+        self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
+    ) -> Reply:
+        """The owner wants a held debtor chased again (a dispute sorted, a new plan)."""
+        candidates = _payment_candidates(action, open_invoices)
+        if not candidates:
+            return await self._ask(business_id, text, action, not_found=True)
+        who = action.debtor_name or candidates[0].debtor_name
+        released = await self._chases.release([i.id for i in candidates])
+        if released:
+            reply = Reply(text=f"Done, reminders to {who} are back on.")
+        else:
+            reply = Reply(text=f"Reminders to {who} weren't paused, so nothing changes.")
         return await self._record(business_id, text, Decision.noted, action, reply)
 
     async def _apply_business_name(
@@ -349,17 +422,19 @@ class IntakeService:
             # For a named debtor, enrich each debt with payment progress (bounded N).
             answer = await self._answer_for_debtor(open_invoices, action.debtor_name)
         else:
-            answer = _answer_query(open_invoices, None)
+            holds = await self._chases.holds([i.id for i in open_invoices])
+            answer = _answer_query(open_invoices, holds)
         return await self._record(business_id, text, Decision.answered, action, Reply(text=answer))
 
     async def _answer_for_debtor(self, open_invoices: list[Invoice], debtor_name: str) -> str:
         matches = [i for i in open_invoices if i.debtor_name.lower() == debtor_name.lower()]
         if not matches:
             return f"You have no open debt recorded for {debtor_name}."
+        holds = await self._chases.holds([i.id for i in matches])
         parts = []
         for inv in matches:
             paid = await self._payments.total_paid(inv.id)
-            summary = _summary(inv)
+            summary = _summary(inv, holds.get(inv.id))
             if paid > 0:  # only show progress once a partial payment exists
                 original = (inv.amount_ngn or 0) + paid
                 summary += f" — ₦{paid:,} of ₦{original:,} paid"

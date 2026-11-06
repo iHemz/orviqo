@@ -141,7 +141,9 @@ alone.
 Inbound, STOP opts the number out of every business that saved it. Any other
 message is the sender's own intake (a debtor may run a ledger too); the intake
 agent sees the reminders they received, relays an answer to one to that business,
-and asks when it can't tell.
+and asks when it can't tell. An answer that promises a date holds the chase for
+that debt until the date passes; one that disputes the debt holds it until the
+owner says "keep chasing <name>".
 
 ## 5. The daily collections run
 

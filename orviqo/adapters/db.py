@@ -95,6 +95,18 @@ chases = Table(
     Column("message_id", String, nullable=True, index=True),
 )
 
+# At most one hold per invoice: chasing it is paused until a promised date, or,
+# for a dispute, until the owner says to carry on (see domain Hold).
+chase_holds = Table(
+    "chase_holds",
+    metadata,
+    Column("invoice_id", String, primary_key=True),
+    Column("reason", String, nullable=False),  # "promise" | "dispute"
+    Column("until", Date, nullable=True),
+    Column("note", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 # A debtor's contact + consent state, so the owner can have Orviqo chase them.
 # One row per (business, debtor name); `opted_out` is the STOP gate.
 debtors = Table(

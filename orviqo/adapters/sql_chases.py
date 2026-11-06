@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from orviqo.adapters.db import chases
+from orviqo.adapters.db import chase_holds, chases
+from orviqo.domain.models import Hold
 
 
 class SqlAlchemyChaseStore:
@@ -29,3 +30,25 @@ class SqlAlchemyChaseStore:
         stmt = select(chases.c.invoice_id).where(chases.c.message_id == message_id)
         async with self._engine.connect() as conn:
             return (await conn.execute(stmt)).scalar()
+
+    async def hold(self, hold: Hold) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                delete(chase_holds).where(chase_holds.c.invoice_id == hold.invoice_id)
+            )
+            await conn.execute(insert(chase_holds).values(**hold.model_dump()))
+
+    async def holds(self, invoice_ids: list[str]) -> dict[str, Hold]:
+        if not invoice_ids:
+            return {}
+        stmt = select(chase_holds).where(chase_holds.c.invoice_id.in_(invoice_ids))
+        async with self._engine.connect() as conn:
+            rows = (await conn.execute(stmt)).mappings().all()
+        return {row["invoice_id"]: Hold.model_validate(dict(row)) for row in rows}
+
+    async def release(self, invoice_ids: list[str]) -> int:
+        if not invoice_ids:
+            return 0
+        stmt = delete(chase_holds).where(chase_holds.c.invoice_id.in_(invoice_ids))
+        async with self._engine.begin() as conn:
+            return (await conn.execute(stmt)).rowcount
