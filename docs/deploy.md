@@ -110,17 +110,23 @@ a saved contact and an overdue debt. A debtor is virtually never inside the 24h
 window, so this **requires its own approved template**, e.g.:
 
 ```
-Hi {{1}}, a friendly reminder that {{2}} for {{3}} was due {{4}}.
-Kindly arrange payment. Reply STOP to opt out.
+Hi {{1}}, a friendly reminder from {{2}}: {{3}} for {{4}} was due {{5}}.
+Kindly arrange payment with them. Reply STOP to opt out.
 ```
 
 Register it as a **Utility** template, then set `WHATSAPP_CHASE_TEMPLATE` (and
 `WHATSAPP_TEMPLATE_LANG`, default `en_US`). Until it's set, the chase pass is a
-safe no-op. The four body variables are filled, in order, with the debtor's
-name, the amount (₦), the item, and the due date (see `_chase_params` in
-`chase_service.py`). Inbound routing honors STOP automatically: a known
-debtor's reply is handled by `DebtorInboxService` (opt-out or acknowledge) and
-never reaches owner intake.
+safe no-op. The five body variables are filled, in order, with the debtor's
+name, who is owed (the business name and WhatsApp number, e.g. "Ada Fabrics
+(+2348031234567)"), the amount (₦), the item, and the due date (see
+`_chase_params` in `chase_service.py`). A reminder always names who is owed: the
+owner's chosen business name, else their WhatsApp profile name, else the number
+alone.
+
+Inbound, STOP opts the number out of every business that saved it. Any other
+message is the sender's own intake (a debtor may run a ledger too); the intake
+agent sees the reminders they received, relays an answer to one to that business,
+and asks when it can't tell.
 
 ## 5. The daily collections run
 

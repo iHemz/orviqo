@@ -20,7 +20,13 @@ from test_mcp_server import BIZ, READ_TOOLS, call, debt, list_tools, make
 async def test_write_tools_are_listed_and_record_debt_demands_an_amount() -> None:
     tools = await list_tools(make()[0])
 
-    writes = {"record_debt", "update_debt", "record_payment", "save_debtor_contact"}
+    writes = {
+        "record_debt",
+        "update_debt",
+        "record_payment",
+        "save_debtor_contact",
+        "set_business_name",
+    }
     assert set(tools) == READ_TOOLS | writes
     for name in writes:
         assert tools[name].annotations.read_only_hint is False
@@ -208,3 +214,14 @@ async def test_save_contact_keeps_an_opt_out_and_creates_no_debt() -> None:
     [entry] = await stores.audit.entries(BIZ)
     assert entry.decision is Decision.noted
     assert "4567" not in entry.message  # the trace doesn't copy the number
+
+
+async def test_set_business_name_sets_what_reminders_show() -> None:
+    server, stores = make()
+
+    result = await call(server, "set_business_name", name="Ada Fabrics")
+
+    assert result["status"] == "noted"
+    assert "Ada Fabrics (+2348030000001)" in result["message"]
+    profile = await stores.businesses.get(BIZ)
+    assert profile is not None and profile.name == "Ada Fabrics"

@@ -17,11 +17,13 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 
 from orviqo.adapters.audit import AuditLog
+from orviqo.adapters.businesses import BusinessStore, InMemoryBusinessStore
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.payments import PaymentStore
 from orviqo.agents.base import IntakeAgent
 from orviqo.domain.audit import AuditEntry, Decision
+from orviqo.domain.business import BusinessProfile, identify
 from orviqo.domain.intake import IntakeAction, Reminder, Turn
 from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
 
@@ -97,6 +99,12 @@ def _answer_query(open_invoices: list[Invoice], debtor_name: str | None) -> str:
     return f"You have {len(open_invoices)} open debt(s):\n{lines}"
 
 
+def _creditor(reminder: Reminder) -> str:
+    """The business owed, for the debtor: "Ada Fabrics (+2348031234567)"."""
+    profile = BusinessProfile(business_id=reminder.business_id, name=reminder.creditor_name)
+    return identify(reminder.business_id, profile)
+
+
 def _my_debts(reminders: Sequence[Reminder]) -> str:
     """What the sender owes others, as far as Orviqo knows: reminders it sent them.
 
@@ -115,7 +123,8 @@ def _my_debts(reminders: Sequence[Reminder]) -> str:
     for r in reminders:
         due = f", due {r.due_date.isoformat()}" if r.due_date else ""
         lines.append(
-            f"- ₦{r.amount_ngn:,} for {r.item or 'an order'}{due} (reminded {r.reminded_at:%d %b})"
+            f"- ₦{r.amount_ngn:,} to {_creditor(r)} for {r.item or 'an order'}{due} "
+            f"(reminded {r.reminded_at:%d %b})"
         )
     return f"{note} Reminders you've had:\n" + "\n".join(lines)
 
@@ -158,6 +167,7 @@ class IntakeService:
         payments: PaymentStore,
         debtors: DebtorStore,
         confidence_threshold: float = 0.5,
+        businesses: BusinessStore | None = None,
     ) -> None:
         self._agent = agent
         self._ledger = ledger
@@ -165,6 +175,7 @@ class IntakeService:
         self._payments = payments
         self._debtors = debtors
         self._threshold = confidence_threshold
+        self._businesses = businesses or InMemoryBusinessStore()
 
     async def handle_message(
         self, business_id: str, text: str, reminders: Sequence[Reminder] = ()
@@ -212,6 +223,8 @@ class IntakeService:
             return await self._record(business_id, source, Decision.answered, action, reply)
         if action.kind == "reminder_reply":
             return await self._relay(business_id, source, action, reminders)
+        if action.kind == "business_name":
+            return await self._apply_business_name(business_id, source, action)
         if action.kind == "my_debts":
             reply = Reply(text=_my_debts(reminders))
             return await self._record(business_id, source, Decision.answered, action, reply)
@@ -305,12 +318,28 @@ class IntakeService:
         )
         # Say exactly where it went: a misread (their own customer paid them) shows at once.
         ack = (
-            "Thanks, I've passed that on to the business that reminded you about "
+            f"Thanks, I've passed that on to {_creditor(reminder)}, who reminded you about "
             f"₦{reminder.amount_ngn:,} for {reminder.item or 'your order'}."
         )
         if not reminder.quoted:
             ack += " If it was about your own customers instead, tell me who paid."
         reply = Reply(text=ack, relay=relay)
+        return await self._record(business_id, text, Decision.noted, action, reply)
+
+    async def _apply_business_name(
+        self, business_id: str, text: str, action: IntakeAction
+    ) -> Reply:
+        name = (action.business_name or "").strip()
+        if not name:
+            reply = Reply(text=action.clarify or "What name should your reminders show?")
+            return await self._record(business_id, text, Decision.asked, action, reply)
+        profile = await self._businesses.set_name(business_id, name[:80])
+        reply = Reply(
+            text=(
+                "Done. Reminders to your debtors will say they're from "
+                f"{identify(business_id, profile)}."
+            )
+        )
         return await self._record(business_id, text, Decision.noted, action, reply)
 
     async def _answer(
@@ -345,10 +374,17 @@ class IntakeService:
             return await self._record(business_id, text, Decision.asked, action, reply)
 
         debtor = await self._debtors.upsert(business_id, action.debtor_name, action.phone)
+        profile = await self._businesses.get(business_id)
         reply = Reply(
             text=(
                 f"Saved {debtor.name}'s number (+{debtor.phone}). "
-                "I'll chase them directly when a debt runs overdue."
+                "I'll chase them directly when a debt runs overdue. Reminders will say "
+                f"they're from {identify(business_id, profile)}"
+                + (
+                    "."
+                    if profile and profile.name
+                    else '; to show your business name, say "my business name is …".'
+                )
             )
         )
         return await self._record(business_id, text, Decision.noted, action, reply)

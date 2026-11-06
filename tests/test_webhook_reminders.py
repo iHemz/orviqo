@@ -102,7 +102,7 @@ def test_the_agent_sees_reminders_apart_from_the_senders_own_ledger() -> None:
     context = _format_context([], [], [reminder])
 
     assert "Reminders this sender received" in context
-    assert "reminder #inv9 · they owe ₦50,000 for rice" in context
+    assert "reminder #inv9 · they owe a business ₦50,000 for rice" in context
     assert WHOLESALER not in context  # the creditor's number is none of the model's business
 
 
@@ -149,3 +149,24 @@ async def test_a_swipe_reply_reaches_the_agent_marked_quoted(make_agent, monkeyp
     agent = client.app.state.service._agent  # type: ignore[attr-defined]
     assert [r.quoted for r in agent.seen_reminders] == [True]
     assert any(to == WHOLESALER and '"Paid 20k"' in text for to, text in whatsapp.sent)
+
+
+async def test_the_webhook_notes_the_senders_whatsapp_name(make_agent, monkeypatch) -> None:
+    import json
+
+    from orviqo.adapters.businesses import InMemoryBusinessStore
+
+    monkeypatch.setattr(settings, "whatsapp_app_secret", SECRET)
+    client, _, _ = await _client(IntakeAction(kind="greeting", confidence=0.9), make_agent)
+    businesses = InMemoryBusinessStore()
+    client.app.state.businesses = businesses  # type: ignore[attr-defined]
+    value = {
+        "contacts": [{"profile": {"name": "Chidi Traders"}, "wa_id": SENDER}],
+        "messages": [{"from": SENDER, "id": "w9", "type": "text", "text": {"body": "hi"}}],
+    }
+    body = json.dumps({"entry": [{"changes": [{"value": value}]}]}).encode()
+
+    assert _post(client, body, _sign(body)).status_code == 200
+
+    profile = await businesses.get(SENDER)
+    assert profile is not None and profile.whatsapp_name == "Chidi Traders"

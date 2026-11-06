@@ -25,10 +25,12 @@ from mcp.server.mcpserver import MCPServer
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from orviqo import worker
+from orviqo.adapters.businesses import BusinessStore
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.processed import ProcessedMessageStore
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
+from orviqo.adapters.sql_businesses import SqlAlchemyBusinessStore
 from orviqo.adapters.sql_chases import SqlAlchemyChaseStore
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
@@ -70,6 +72,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     ledger = SqlAlchemyLedger(engine)
     audit = SqlAlchemyAuditLog(engine)
     payments = SqlAlchemyPaymentStore(engine)
+    businesses = SqlAlchemyBusinessStore(engine)
+    app.state.businesses = businesses
     app.state.service = IntakeService(
         agent=agent,
         ledger=ledger,
@@ -77,6 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         payments=payments,
         debtors=debtor_store,
         confidence_threshold=settings.intake_confidence_threshold,
+        businesses=businesses,
     )
     # The web demo runs the same intake, except a debtor number typed into it is
     # held in memory only: never stored, so never chased or routed as a real debtor.
@@ -98,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         whatsapp,
         ledger=ledger,
         chases=SqlAlchemyChaseStore(engine),
+        businesses=businesses,
     )
     app.state.processed = SqlAlchemyProcessedMessageStore(engine)
     app.state.whatsapp = whatsapp
@@ -188,9 +194,14 @@ def create_app() -> FastAPI:
         payload = json.loads(body)
         messages = list(iter_text_messages(payload))
         log.info("webhook: %d text message(s)", len(messages))  # never the content
+        businesses: BusinessStore | None = getattr(request.app.state, "businesses", None)
         for msg in messages:
             if await processed.seen(msg.id):
                 continue  # redelivered webhook — already handled
+            if businesses is not None and msg.sender_name:
+                # Their WhatsApp name: how their reminders introduce them until they
+                # set a business name of their own.
+                await businesses.note_whatsapp_name(msg.sender, msg.sender_name)
             # "LINK ABCD-2345" from the hosted MCP sign-in page: the sender's number
             # proves which ledger is theirs. No intake, so no LLM call.
             link_reply = await oauth.link_from_message(msg.sender, msg.text) if oauth else None
@@ -238,6 +249,7 @@ def _hosted_mcp(engine: AsyncEngine) -> tuple[MCPServer, OrviqoOAuthProvider]:
         payments=SqlAlchemyPaymentStore(engine),
         debtors=SqlAlchemyDebtorStore(engine),
         audit=SqlAlchemyAuditLog(engine),
+        businesses=SqlAlchemyBusinessStore(engine),
     )
     return build_hosted_server(
         stores,

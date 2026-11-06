@@ -109,6 +109,17 @@ debtors = Table(
 )
 
 
+# Who a business is to its debtors: the owner's chosen name, and their WhatsApp
+# profile name as the fallback (see orviqo/domain/business.py).
+businesses = Table(
+    "businesses",
+    metadata,
+    Column("business_id", String, primary_key=True),
+    Column("name", String, nullable=True),
+    Column("whatsapp_name", String, nullable=True),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 # Hosted MCP OAuth (see orviqo/mcp/oauth.py). Clients register themselves (RFC 7591).
 oauth_clients = Table(
     "oauth_clients",

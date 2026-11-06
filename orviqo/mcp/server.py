@@ -19,7 +19,7 @@ import json
 import logging
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any
 
@@ -29,11 +29,13 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from orviqo.adapters.audit import AuditLog
+from orviqo.adapters.businesses import BusinessStore, InMemoryBusinessStore
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.payments import PaymentStore
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
+from orviqo.adapters.sql_businesses import SqlAlchemyBusinessStore
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
@@ -119,11 +121,19 @@ class Stores:
     payments: PaymentStore
     debtors: DebtorStore
     audit: AuditLog
+    businesses: BusinessStore = field(default_factory=InMemoryBusinessStore)
 
     def intake(self) -> IntakeService:
         # confidence 1.0 on every tool action makes the threshold moot: the caller
         # stated each field, so the required-field and ambiguity checks are the gate.
-        return IntakeService(_NoParser(), self.ledger, self.audit, self.payments, self.debtors)
+        return IntakeService(
+            _NoParser(),
+            self.ledger,
+            self.audit,
+            self.payments,
+            self.debtors,
+            businesses=self.businesses,
+        )
 
 
 def _trace(tool: str, **fields: Any) -> str:
@@ -400,6 +410,21 @@ def build_server(
         source = _trace("save_debtor_contact", debtor=debtor_name)  # no phone in the log
         return await result(await intake.apply(tenant.business_id(), source, action))
 
+    @server.tool(annotations=_IDEMPOTENT_WRITE)
+    async def set_business_name(
+        name: Annotated[str, Field(min_length=1, max_length=80)],
+    ) -> ToolResult:
+        """Set the business name the owner's payment reminders show their debtors.
+
+        Reminders always name who is owed, with the owner's WhatsApp number, e.g.
+        "Ada Fabrics (+2348031234567)". Without a name set, Orviqo uses the owner's
+        WhatsApp profile name. Use this when the owner tells you their business name.
+        Returns noted.
+        """
+        action = IntakeAction(kind="business_name", business_name=name.strip(), confidence=1.0)
+        source = _trace("set_business_name", name=name)
+        return await result(await intake.apply(tenant.business_id(), source, action))
+
     @server.prompt(title="Orviqo amount conventions")
     def amount_conventions() -> str:
         """How to turn what the owner says into Orviqo amounts and dates."""
@@ -415,6 +440,7 @@ async def _serve(business_id: str) -> None:
         payments=SqlAlchemyPaymentStore(engine),
         debtors=SqlAlchemyDebtorStore(engine),
         audit=SqlAlchemyAuditLog(engine),
+        businesses=SqlAlchemyBusinessStore(engine),
     )
     try:
         await build_server(stores, StaticTenant(business_id)).run_stdio_async()

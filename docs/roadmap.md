@@ -77,6 +77,10 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
       reply that quotes it (`context.id`) marks that reminder as answered for the
       intake agent, so "Paid 20k" sent as a reply goes to that creditor without a
       question. Only the sender's own reminders can be matched.
+- [x] **Reminders name the creditor.** Every reminder, "who do I owe?" answer and
+      relayed reply names who is owed, with their WhatsApp number: the owner's
+      chosen business name ("my business name is …", or `set_business_name` over
+      MCP), else their WhatsApp profile name, else the number alone.
 - [x] **"Who do I owe?"** is its own question, answered from the reminders the
       sender received, never from their ledger (which is money owed *to* them).
 - [ ] **Richer debtor conversations.** Beyond STOP/ack: let a debtor's "I'll pay
