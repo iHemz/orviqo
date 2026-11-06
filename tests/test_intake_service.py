@@ -510,7 +510,7 @@ async def test_who_do_i_owe_never_lists_the_senders_own_debtors(make_agent) -> N
     nothing = await service.handle_message("me", "who do I owe?", [])
 
     assert "Bola" not in owed.text and "30,000" not in owed.text  # their debtor, not a debt
-    assert "₦50,000 for rice, due 2026-10-30" in owed.text
+    assert "₦50,000 to wholesaler for rice, due 2026-10-30" in owed.text
     assert "Bola" not in nothing.text and "who owes me?" in nothing.text
 
 

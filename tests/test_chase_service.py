@@ -61,7 +61,7 @@ async def test_chases_a_debtor_with_a_saved_contact() -> None:
     assert sent == 1
     to, name, params, _ = wa.templates[0]
     assert to == "2348031234567" and name == TEMPLATE
-    assert params[0] == "Chidi" and "80,000" in params[1]
+    assert params[0] == "Chidi" and params[1] == "biz1" and "80,000" in params[2]
     [invoice] = await ledger.open_invoices("biz1")
     assert await chases.invoice_for_message("wamid.1") == invoice.id  # for swipe-replies
 

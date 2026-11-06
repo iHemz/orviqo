@@ -28,7 +28,8 @@ class Reminder(BaseModel):
     """
 
     invoice_id: str  # the creditor's invoice the reminder was about
-    business_id: str  # the creditor (the owner who chased)
+    business_id: str  # the creditor (the owner who chased): their WhatsApp number
+    creditor_name: str | None = None  # the creditor's business name, if known
     debtor_name: str  # how the creditor saved the sender
     amount_ngn: int
     item: str | None
@@ -51,6 +52,7 @@ class IntakeAction(BaseModel):
         "greeting",
         "reminder_reply",
         "my_debts",
+        "business_name",
     ]
     invoice_id: str | None = Field(
         default=None, description="Which open invoice to update/settle (update, payment)."
@@ -66,6 +68,10 @@ class IntakeAction(BaseModel):
     item: str | None = None
     due_date: date | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    business_name: str | None = Field(
+        default=None,
+        description="The name the owner wants their reminders to show (kind='business_name').",
+    )
     reminder_id: str | None = Field(
         default=None,
         description="Which received reminder a 'reminder_reply' answers (its #id).",

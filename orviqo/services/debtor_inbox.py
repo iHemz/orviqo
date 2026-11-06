@@ -22,6 +22,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+from orviqo.adapters.businesses import BusinessStore, InMemoryBusinessStore
 from orviqo.adapters.chases import ChaseStore
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
@@ -53,6 +54,7 @@ class DebtorInboxService:
         *,
         ledger: LedgerStore,
         chases: ChaseStore,
+        businesses: BusinessStore | None = None,
         window: timedelta = REMINDER_WINDOW,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
@@ -60,6 +62,7 @@ class DebtorInboxService:
         self._whatsapp = whatsapp
         self._ledger = ledger
         self._chases = chases
+        self._businesses = businesses or InMemoryBusinessStore()
         self._window = window
         self._now = clock
 
@@ -90,6 +93,8 @@ class DebtorInboxService:
         quoted_invoice = await self._chases.invoice_for_message(quoted_id) if quoted_id else None
         reminders: list[Reminder] = []
         for debtor in await self._debtors.find_all_by_phone(sender_phone):
+            profile = await self._businesses.get(debtor.business_id)
+            creditor_name = profile.display_name if profile else None
             for invoice in await self._ledger.open_invoices(debtor.business_id):
                 if invoice.debtor_name.casefold() != debtor.name.casefold():
                     continue
@@ -103,6 +108,7 @@ class DebtorInboxService:
                         Reminder(
                             invoice_id=invoice.id,
                             business_id=debtor.business_id,
+                            creditor_name=creditor_name,
                             debtor_name=debtor.name,
                             amount_ngn=invoice.amount_ngn or 0,
                             item=invoice.item,

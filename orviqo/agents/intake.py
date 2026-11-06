@@ -56,6 +56,9 @@ Choose exactly one `kind`:
   the open invoices or recent conversation. Ask ONE short question.
 - "greeting": a hello, thanks, or small talk with no debt, payment or question
   in it ("Hi Orviqo", "good morning", "thanks"). Set nothing else.
+- "business_name": the owner names their business, the name reminders to their
+  debtors will show ("my business name is Ada Fabrics", "call my shop Mama Chidi
+  Stores"). Put it in `business_name`, exactly as written. Set nothing else.
 - "my_debts": the sender asks what THEY owe other people ("who do I owe?", "how
   much do I owe?", "what do I owe Chidi?"). Never "query": "query" is only ever
   about people who owe the sender. Set nothing else.
@@ -129,7 +132,8 @@ def _format_context(
                 else ""
             )
             lines.append(
-                f"- reminder #{r.invoice_id} · they owe ₦{r.amount_ngn:,} for "
+                f"- reminder #{r.invoice_id} · they owe {r.creditor_name or 'a business'} "
+                f"₦{r.amount_ngn:,} for "
                 f"{r.item or 'an order'} · due {due} · reminded {r.reminded_at:%Y-%m-%d}{quoted}"
             )
     if history:

@@ -28,12 +28,14 @@ log = logging.getLogger("orviqo.whatsapp")
 class InboundMessage(NamedTuple):
     """One inbound text message. ``id`` is the WhatsApp ``wamid`` — used to dedup
     redelivered webhooks so a message is never processed twice. ``quoted_id`` is the
-    ``wamid`` of the message it swipe-replies to, if any (e.g. one of our reminders)."""
+    ``wamid`` of the message it swipe-replies to, if any (e.g. one of our reminders).
+    ``sender_name`` is the sender's WhatsApp profile name, when WhatsApp includes it."""
 
     sender: str
     text: str
     id: str
     quoted_id: str | None = None
+    sender_name: str | None = None
 
 
 def valid_signature(app_secret: str, body: bytes, header: str) -> bool:
@@ -52,13 +54,20 @@ def iter_text_messages(payload: dict) -> Iterator[InboundMessage]:
     """Yield an ``InboundMessage`` for each text message in a Cloud API webhook."""
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
-            for msg in change.get("value", {}).get("messages", []):
+            value = change.get("value", {})
+            names = {
+                c.get("wa_id"): (c.get("profile") or {}).get("name")
+                for c in value.get("contacts", [])
+            }
+            for msg in value.get("messages", []):
                 if msg.get("type") == "text":
+                    sender = msg.get("from", "")
                     yield InboundMessage(
-                        sender=msg.get("from", ""),
+                        sender=sender,
                         text=msg["text"]["body"],
                         id=msg.get("id", ""),
                         quoted_id=(msg.get("context") or {}).get("id"),
+                        sender_name=(names.get(sender) or "").strip() or None,
                     )
 
 
