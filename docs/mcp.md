@@ -311,7 +311,7 @@ All four steps are built.
 The same tools over Streamable HTTP with OAuth, so an owner connects Orviqo in
 claude.ai or ChatGPT by pasting one URL and never runs anything. It is mounted on
 the existing Vercel app at `/mcp` when `ORVIQO_PUBLIC_URL` is set (`docs/deploy.md`
-step 7); with it unset, nothing changes.
+step 8); with it unset, nothing changes.
 
 ```
 claude.ai / ChatGPT ──HTTPS──▶ /mcp            Bearer token → TokenTenant → business_id

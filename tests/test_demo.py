@@ -104,6 +104,21 @@ def test_landing_page_shows_whatsapp_button_only_when_configured(monkeypatch) ->
     assert 'href="/start"' in client.get("/").text
 
 
+def test_privacy_policy_is_linked_and_names_a_contact(monkeypatch) -> None:
+    client = TestClient(webhook.create_app())
+    assert 'href="/privacy"' in client.get("/").text
+
+    monkeypatch.setattr(settings, "orviqo_contact_email", "privacy@orviqo.example")
+    monkeypatch.setattr(settings, "whatsapp_display_number", "")
+    page = client.get("/privacy")
+    assert page.status_code == 200
+    assert "mailto:privacy@orviqo.example" in page.text and "{{" not in page.text
+
+    monkeypatch.setattr(settings, "orviqo_contact_email", "")
+    monkeypatch.setattr(settings, "whatsapp_display_number", "+234 803 123 4567")
+    assert "WhatsApp at +234 803 123 4567" in client.get("/privacy").text
+
+
 def test_demo_route_returns_replies(make_agent) -> None:
     client = _client(_demo(make_agent(CREATE)))
 

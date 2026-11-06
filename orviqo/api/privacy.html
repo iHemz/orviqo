@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Orviqo</title>
+<meta name="description" content="What Orviqo collects, why, who processes it, and how to have it deleted.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23128c5e'/%3E%3Ctext x='16' y='22' font-family='Arial' font-weight='700' font-size='18' fill='white' text-anchor='middle'%3EO%3C/text%3E%3C/svg%3E">
+<style>
+:root { --bg: #f6f5f1; --text: #1c1d1a; --muted: #5d6058; --border: #e2e0d8; --accent: #128c5e; --accent-text: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #121411; --text: #ebece6; --muted: #a3a79c; --border: #2f332d; --accent: #2fbf86; --accent-text: #0b1a12; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+header.top { padding: 20px 16px; display: flex; align-items: center; }
+.brand { font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.brand .mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 0.95rem; }
+h1 { font-size: 2rem; letter-spacing: -0.02em; margin: 16px 0 4px; }
+h2 { font-size: 1.15rem; margin: 32px 0 8px; }
+.muted { color: var(--muted); }
+li { margin-bottom: 6px; }
+footer { border-top: 1px solid var(--border); margin-top: 48px; padding: 24px 0 40px; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<header class="wrap top"><a class="brand" href="/"><span class="mark">O</span>Orviqo</a></header>
+
+<main class="wrap">
+<h1>Privacy policy</h1>
+<p class="muted">Effective {{effective_date}}</p>
+
+<p>Orviqo is a WhatsApp assistant that helps small business owners keep track of who owes them money and reminds their customers to pay. It is run by Williams Balogun, an individual developer in Nigeria ("we"). This policy explains what we collect, why, who helps us process it, and how you can have it deleted.</p>
+
+<h2>Who this covers</h2>
+<ul>
+  <li><strong>Owners:</strong> people who message Orviqo to keep their ledger.</li>
+  <li><strong>Debtors:</strong> people an owner records as owing them, including anyone whose WhatsApp number an owner saves so Orviqo can remind them.</li>
+  <li><strong>Visitors</strong> who try the demo on this website or connect Orviqo to an AI app such as Claude or ChatGPT.</li>
+</ul>
+
+<h2>What we collect</h2>
+<ul>
+  <li><strong>From owners:</strong> your WhatsApp number and WhatsApp profile name, a business name if you give one, the messages you send Orviqo, and the ledger built from them: debtor names, amounts, items, due dates, payments and debtor phone numbers you choose to save.</li>
+  <li><strong>About debtors:</strong> the name and WhatsApp number an owner saved, what you owe that owner, the reminders we sent you, your replies to them, and whether you asked us to stop.</li>
+  <li><strong>A record of decisions:</strong> for each message we keep the message itself next to what Orviqo did with it, so an owner can always see why an entry exists.</li>
+  <li><strong>Website demo:</strong> what you type into the demo, stored under a random session id. It is not linked to your name or number unless you type them in.</li>
+  <li><strong>AI app connections:</strong> which ledger a connection belongs to, and the access tokens that keep it signed in (stored only as one-way hashes).</li>
+</ul>
+<p>We do not use cookies for tracking or advertising, and we do not collect location, contacts, or anything from your phone beyond the messages you send.</p>
+
+<h2>How we use it</h2>
+<ul>
+  <li>To understand your messages and keep your ledger accurate.</li>
+  <li>To remind owners about overdue debts, and to remind debtors, on the owner's behalf, about what they owe. Every reminder names the business and its number, so you know who is asking.</li>
+  <li>To pass a debtor's reply to a reminder on to the owner who sent it.</li>
+  <li>To keep the service secure and working, and to fix problems.</li>
+</ul>
+<p>We do not sell your data, show ads, or send marketing messages. Debtor information is only ever used for the owner who recorded it.</p>
+
+<h2>Who processes it</h2>
+<p>We use a small number of service providers to run Orviqo. Each only receives what it needs to do its job:</p>
+<ul>
+  <li><strong>Meta (WhatsApp Business Platform)</strong> delivers messages between you and Orviqo.</li>
+  <li><strong>Google (Gemini API)</strong> reads each message to work out what it means, for example "Chidi owes me 50k for lace". We use Google's free tier, under which Google may use the content it receives to improve its products, and it may be reviewed by people. Please don't send Orviqo anything you would not want processed this way, such as bank passwords or card details.</li>
+  <li><strong>Vercel</strong> hosts the service and this website.</li>
+  <li><strong>Neon</strong> hosts the database where your ledger is stored.</li>
+</ul>
+<p>If you connect Orviqo to an AI app such as Claude or ChatGPT, the ledger information you ask about is shared with that app, under that app's own privacy policy.</p>
+<p>These providers may store and process data outside Nigeria. We would also disclose information if the law required us to.</p>
+
+<h2>How long we keep it</h2>
+<ul>
+  <li>An owner's ledger and records are kept while the owner keeps using Orviqo, or until they ask us to delete them.</li>
+  <li>Demo ledgers created by AI app connections are deleted automatically after 3 days.</li>
+  <li>Sign-in codes expire after minutes, and expired access tokens are deleted.</li>
+</ul>
+
+<h2>Your choices and rights</h2>
+<ul>
+  <li><strong>Debtors:</strong> reply <strong>STOP</strong> to any reminder and you won't get any more reminders from Orviqo, for any business.</li>
+  <li><strong>Correct:</strong> owners can correct any entry just by telling Orviqo, for example "Chidi's debt is 40k, not 50k".</li>
+  <li><strong>Access or delete:</strong> anyone can ask for a copy of the data we hold about them, or ask us to delete it, using the contact below. We will reply within 30 days.</li>
+</ul>
+<p>We handle personal data in line with the Nigeria Data Protection Act 2023. If you are unhappy with how we handled your request, you can complain to the Nigeria Data Protection Commission.</p>
+
+<h2>Security</h2>
+<p>Data travels over encrypted connections, messages are only accepted when Meta has signed them, and sign-in tokens are stored only as hashes. No system is perfectly secure, so we keep only what Orviqo needs.</p>
+
+<h2>Children</h2>
+<p>Orviqo is meant for businesses and is not for anyone under 18.</p>
+
+<h2>Changes</h2>
+<p>If we change this policy, we will update it here and change the date at the top.</p>
+
+<h2>Contact</h2>
+<p>{{contact}}</p>
+</main>
+
+<footer><div class="wrap"><a href="/">Orviqo</a> · Built by <a href="https://williamsab.dev/work/orviqo">Williams Balogun</a></div></footer>
+</body>
+</html>
