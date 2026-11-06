@@ -1,19 +1,32 @@
-"""Debtor-reply routing — the consent gate for inbound messages.
+"""Debtor-side inbound: consent, and what a sender owes others.
 
-Once Orviqo can message a debtor, that debtor can message back. Their reply must
-NOT be treated as a business owner recording debts. This service inspects an
-inbound message: if the sender is a known debtor it handles the reply here —
-honoring STOP above all, and relaying the reply to the owner — then returns what
-to say back to the debtor. If the sender isn't a known debtor it returns ``None``,
-and the caller falls through to owner intake.
+Once Orviqo can message a debtor, that debtor can message back. But being
+someone's debtor says nothing about who you are to Orviqo: traders owe each
+other all the time, so the retailer who owes a wholesaler is an owner too, with
+debtors of their own. Their messages are owner intake like anyone's.
+
+This service does the two things only the debtor side can:
+
+- ``handle_stop``: STOP (or similar) opts the number out of being chased by every
+  business that saved it, and tells each of those owners. Consent comes first and
+  needs no interpretation.
+- ``recent_reminders``: the payment reminders Orviqo sent this number lately. The
+  intake agent reads them as context to tell "I'll pay Friday" (an answer to a
+  reminder, relayed to that business) from "Ada owes me 20k" (the sender's own
+  ledger), and asks when it truly can't tell.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
+from orviqo.adapters.chases import ChaseStore
 from orviqo.adapters.debtors import DebtorStore
+from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.whatsapp import WhatsAppClient
+from orviqo.domain.intake import Reminder
 from orviqo.domain.models import Debtor
 
 logger = logging.getLogger(__name__)
@@ -23,7 +36,9 @@ logger = logging.getLogger(__name__)
 _STOP_WORDS = {"stop", "unsubscribe", "opt out", "optout", "cancel", "remove"}
 
 _STOP_REPLY = "Done — you won't get any more payment reminders from this number."
-_ACK_REPLY = "Thanks, I've noted that."
+
+# How long after a reminder the agent still considers it when reading a message.
+REMINDER_WINDOW = timedelta(days=7)
 
 
 def _is_stop(text: str) -> bool:
@@ -31,23 +46,61 @@ def _is_stop(text: str) -> bool:
 
 
 class DebtorInboxService:
-    def __init__(self, debtors: DebtorStore, whatsapp: WhatsAppClient) -> None:
+    def __init__(
+        self,
+        debtors: DebtorStore,
+        whatsapp: WhatsAppClient,
+        *,
+        ledger: LedgerStore,
+        chases: ChaseStore,
+        window: timedelta = REMINDER_WINDOW,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
         self._debtors = debtors
         self._whatsapp = whatsapp
+        self._ledger = ledger
+        self._chases = chases
+        self._window = window
+        self._now = clock
 
-    async def handle_if_debtor(self, sender_phone: str, text: str) -> str | None:
-        """Return a reply if the sender is a known debtor, else ``None``."""
-        debtor = await self._debtors.find_by_phone(sender_phone)
-        if debtor is None:
+    async def handle_stop(self, sender_phone: str, text: str) -> str | None:
+        """Opt a STOP out everywhere and return the reply; ``None`` if it isn't one."""
+        if not _is_stop(text):
             return None
-        if _is_stop(text):
+        contacts = await self._debtors.find_all_by_phone(sender_phone)
+        if not contacts:
+            return None  # nobody chases this number: let intake answer it
+        for debtor in contacts:
             await self._debtors.opt_out(debtor.business_id, debtor.name)
             logger.info("Debtor %s opted out of reminders", debtor.name)
             await self._notify_owner(debtor, f"{debtor.name} opted out of reminders.")
-            return _STOP_REPLY
-        logger.info("Debtor %s replied: %s", debtor.name, text)
-        await self._notify_owner(debtor, f'{debtor.name} replied: "{text}"')
-        return _ACK_REPLY
+        return _STOP_REPLY
+
+    async def recent_reminders(self, sender_phone: str) -> list[Reminder]:
+        """Reminders Orviqo sent this number within the window, newest first."""
+        since = self._now() - self._window
+        reminders: list[Reminder] = []
+        for debtor in await self._debtors.find_all_by_phone(sender_phone):
+            for invoice in await self._ledger.open_invoices(debtor.business_id):
+                if invoice.debtor_name.casefold() != debtor.name.casefold():
+                    continue
+                at = await self._chases.last_chase_at(invoice.id)
+                if at is None:
+                    continue
+                at = at if at.tzinfo else at.replace(tzinfo=UTC)  # SQLite: naive UTC
+                if at >= since:
+                    reminders.append(
+                        Reminder(
+                            invoice_id=invoice.id,
+                            business_id=debtor.business_id,
+                            debtor_name=debtor.name,
+                            amount_ngn=invoice.amount_ngn or 0,
+                            item=invoice.item,
+                            due_date=invoice.due_date,
+                            reminded_at=at,
+                        )
+                    )
+        return sorted(reminders, key=lambda r: r.reminded_at, reverse=True)
 
     async def _notify_owner(self, debtor: Debtor, message: str) -> None:
         """Relay news to the owner — best-effort; a failed relay must not break the reply."""

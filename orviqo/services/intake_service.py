@@ -12,6 +12,8 @@ already decided the action (the MCP server, whose caller fills a typed schema).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel
 
 from orviqo.adapters.audit import AuditLog
@@ -20,10 +22,11 @@ from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.payments import PaymentStore
 from orviqo.agents.base import IntakeAgent
 from orviqo.domain.audit import AuditEntry, Decision
-from orviqo.domain.intake import IntakeAction, Turn
+from orviqo.domain.intake import IntakeAction, Reminder, Turn
 from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
 
 _HISTORY_TURNS = 6
+_REMINDER_ACK = "Thanks, I've passed that on to them."
 _FALLBACK_ASK = "Sorry, I didn't fully get that — who owes you, how much, and by when?"
 _GREETING_REPLY = (
     'Hi! Tell me about a debt ("Chidi owes 50k for rice"), a payment '
@@ -39,6 +42,13 @@ WELCOME = (
     '- "Chidi\'s number is 0803 123 4567"\n\n'
     "If anything is unclear, I'll ask rather than guess."
 )
+
+
+class Relay(BaseModel):
+    """A message for another business: a debtor's answer to that business's reminder."""
+
+    to: str  # the creditor's business id (their WhatsApp number)
+    text: str
 
 
 class Reply(BaseModel):
@@ -61,6 +71,7 @@ class Reply(BaseModel):
     invoice: Invoice | None = None
     candidates: list[Invoice] = []
     not_found: bool = False
+    relay: Relay | None = None
 
 
 def _summary(invoice: Invoice) -> str:
@@ -133,12 +144,17 @@ class IntakeService:
         self._debtors = debtors
         self._threshold = confidence_threshold
 
-    async def handle_message(self, business_id: str, text: str) -> Reply:
+    async def handle_message(
+        self, business_id: str, text: str, reminders: Sequence[Reminder] = ()
+    ) -> Reply:
+        """``reminders``: payment reminders this sender recently received as someone's
+        debtor, so the agent can tell a reply to one from the sender's own business."""
         open_invoices = await self._ledger.open_invoices(business_id)
         history = await self._recent_turns(business_id)
-        action = await self._agent.decide(text, open_invoices, history)
-        if history:
-            return await self.apply(business_id, text, action, open_invoices)
+        action = await self._agent.decide(text, open_invoices, history, reminders)
+        if history or action.kind == "reminder_reply":
+            # Answering a reminder isn't signing up: no welcome in front of the ack.
+            return await self.apply(business_id, text, action, open_invoices, reminders)
 
         # No prior turns in the audit log: this sender has never talked to us.
         if action.kind == "greeting":
@@ -156,6 +172,7 @@ class IntakeService:
         source: str,
         action: IntakeAction,
         open_invoices: list[Invoice] | None = None,
+        reminders: Sequence[Reminder] = (),
     ) -> Reply:
         """Execute an already-decided action through the rigor gate, and audit it.
 
@@ -171,6 +188,8 @@ class IntakeService:
         if action.kind == "greeting":
             reply = Reply(text=_GREETING_REPLY)
             return await self._record(business_id, source, Decision.answered, action, reply)
+        if action.kind == "reminder_reply":
+            return await self._relay(business_id, source, action, reminders)
         if action.kind == "query":
             return await self._answer(business_id, source, action, open_invoices)
         if action.kind == "payment":
@@ -233,6 +252,32 @@ class IntakeService:
             )
         reply = Reply(text=text_out, recorded_invoice_id=target.id, invoice=settled)
         return await self._record(business_id, text, Decision.reconciled, action, reply)
+
+    async def _relay(
+        self, business_id: str, text: str, action: IntakeAction, reminders: Sequence[Reminder]
+    ) -> Reply:
+        """Pass a debtor's answer to the business that reminded them. Writes no ledger:
+        "I paid 20k" is the debtor's word, for the owner to confirm and record."""
+        ref = (action.reminder_id or "").lstrip("#")
+        reminder = next((r for r in reminders if r.invoice_id == ref), None)
+        if reminder is None and len(reminders) == 1:
+            reminder = reminders[0]  # only one it can be
+        if reminder is None:
+            return await self._ask(business_id, text, action)
+        said = f'"{text}"'
+        last = await self._audit.recent(business_id, 1)
+        if last and last[0].decision is Decision.asked:
+            # Answering our "is that about the reminder?": pass on what they first said too.
+            said = f'"{last[0].message}" (then: "{text}")'
+        relay = Relay(
+            to=reminder.business_id,
+            text=(
+                f"{reminder.debtor_name} replied to your reminder about ₦{reminder.amount_ngn:,}"
+                f' for {reminder.item or "their order"}: {said}'
+            ),
+        )
+        reply = Reply(text=_REMINDER_ACK, relay=relay)
+        return await self._record(business_id, text, Decision.noted, action, reply)
 
     async def _answer(
         self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]

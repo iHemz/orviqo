@@ -9,6 +9,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from orviqo.adapters.audit import InMemoryAuditLog
+from orviqo.adapters.chases import InMemoryChaseStore
 from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.ledger import InMemoryLedger
 from orviqo.adapters.payments import InMemoryPaymentStore
@@ -86,7 +87,12 @@ def _client(make_agent, whatsapp) -> TestClient:
         InMemoryPaymentStore(),
         InMemoryDebtorStore(),
     )
-    app.state.inbox = DebtorInboxService(InMemoryDebtorStore(), whatsapp)
+    app.state.inbox = DebtorInboxService(
+        InMemoryDebtorStore(),
+        whatsapp,
+        ledger=InMemoryLedger(),
+        chases=InMemoryChaseStore(),
+    )
     app.state.processed = InMemoryProcessedMessageStore()
     app.state.whatsapp = whatsapp
     return TestClient(app)

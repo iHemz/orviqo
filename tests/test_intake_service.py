@@ -7,14 +7,14 @@ the rigor gate — and that the conversation context is actually passed along.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 from orviqo.adapters.audit import InMemoryAuditLog
 from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.ledger import InMemoryLedger
 from orviqo.adapters.payments import InMemoryPaymentStore
 from orviqo.domain.audit import AuditEntry, Decision
-from orviqo.domain.intake import IntakeAction
+from orviqo.domain.intake import IntakeAction, Reminder
 from orviqo.domain.models import ParsedInvoice
 from orviqo.services.intake_service import WELCOME, IntakeService
 
@@ -383,3 +383,93 @@ def _prior_turn(business_id: str) -> AuditEntry:
         confidence=0.3,
         reason=WELCOME,
     )
+
+
+# --- a sender who is also someone's debtor ----------------------------------------
+
+
+def _reminder(invoice_id: str = "inv9", business: str = "wholesaler") -> Reminder:
+    return Reminder(
+        invoice_id=invoice_id,
+        business_id=business,
+        debtor_name="Chidi",
+        amount_ngn=50_000,
+        item="rice",
+        due_date=date(2026, 10, 30),
+        reminded_at=datetime(2026, 11, 6, 9, tzinfo=UTC),
+    )
+
+
+async def test_an_answer_to_a_reminder_is_relayed_and_recorded_nowhere(make_agent) -> None:
+    action = IntakeAction(kind="reminder_reply", reminder_id="#inv9", confidence=0.9)
+    ledger, audit = InMemoryLedger(), InMemoryAuditLog()
+    agent = make_agent(action)
+    service = IntakeService(agent, ledger, audit, InMemoryPaymentStore(), InMemoryDebtorStore())
+
+    reply = await service.handle_message("retailer", "I'll pay on Friday", [_reminder()])
+
+    assert agent.seen_reminders == [_reminder()]  # the agent decided with the reminder
+    assert reply.relay is not None and reply.relay.to == "wholesaler"
+    assert reply.relay.text == (
+        'Chidi replied to your reminder about ₦50,000 for rice: "I\'ll pay on Friday"'
+    )
+    assert reply.welcome is None  # answering a reminder isn't signing up
+    assert await ledger.open_invoices("retailer") == []
+    assert (await audit.entries("retailer"))[0].decision is Decision.noted
+
+
+async def test_own_business_right_after_a_reminder_goes_to_the_own_ledger(make_agent) -> None:
+    # The reported case: chased, ignores the reminder, records their own debtor at once.
+    action = IntakeAction(kind="create", debtor_name="Ada", amount_ngn=20_000, confidence=0.95)
+    ledger = InMemoryLedger()
+    service = IntakeService(
+        make_agent(action),
+        ledger,
+        InMemoryAuditLog(),
+        InMemoryPaymentStore(),
+        InMemoryDebtorStore(),
+    )
+
+    reply = await service.handle_message("retailer", "Ada owes me 20k", [_reminder()])
+
+    assert reply.relay is None
+    assert [i.debtor_name for i in await ledger.open_invoices("retailer")] == ["Ada"]
+
+
+async def test_a_reply_to_an_unknown_reminder_with_several_on_file_asks(make_agent) -> None:
+    action = IntakeAction(kind="reminder_reply", reminder_id="nope", confidence=0.6)
+    service = IntakeService(
+        make_agent(action),
+        InMemoryLedger(),
+        InMemoryAuditLog(),
+        InMemoryPaymentStore(),
+        InMemoryDebtorStore(),
+    )
+
+    reply = await service.handle_message(
+        "retailer", "I'll pay soon", [_reminder("a", "w1"), _reminder("b", "w2")]
+    )
+
+    assert reply.relay is None and reply.decision is Decision.asked
+
+
+async def test_after_asking_which_the_relay_carries_the_original_message(make_agent) -> None:
+    audit = InMemoryAuditLog()
+    await audit.record(
+        AuditEntry(
+            business_id="retailer",
+            message="Paid 20k",
+            decision=Decision.asked,
+            confidence=0.5,
+            reason="Is that about the ₦50,000 reminder, or did someone pay you?",
+        )
+    )
+    action = IntakeAction(kind="reminder_reply", reminder_id="inv9", confidence=0.9)
+    service = IntakeService(
+        make_agent(action), InMemoryLedger(), audit, InMemoryPaymentStore(), InMemoryDebtorStore()
+    )
+
+    reply = await service.handle_message("retailer", "the reminder", [_reminder()])
+
+    assert reply.relay is not None
+    assert reply.relay.text.endswith('"Paid 20k" (then: "the reminder")')

@@ -7,10 +7,10 @@ records the context it was handed — so the intake service is tested end-to-end
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import pytest
-from orviqo.domain.intake import IntakeAction, Turn
+from orviqo.domain.intake import IntakeAction, Reminder, Turn
 from orviqo.domain.models import Invoice
 
 
@@ -19,12 +19,18 @@ class FakeAgent:
         self._action = action
         self.seen_open_invoices: list[Invoice] = []
         self.seen_history: list[Turn] = []
+        self.seen_reminders: list[Reminder] = []
 
     async def decide(
-        self, message: str, open_invoices: list[Invoice], history: list[Turn]
+        self,
+        message: str,
+        open_invoices: list[Invoice],
+        history: list[Turn],
+        reminders: Sequence[Reminder] = (),
     ) -> IntakeAction:
         self.seen_open_invoices = open_invoices
         self.seen_history = history
+        self.seen_reminders = list(reminders)
         return self._action
 
 
