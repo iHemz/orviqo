@@ -3,6 +3,7 @@
 Status: **built** (all four steps). Run the server with `uv run orviqo-mcp` (setup
 for Claude Code and Claude Desktop is in the README, "Use it from Claude") and the
 evals with `make eval`. First report: `evals/results/2026-11-06-google-gemini-flash-lite-latest.md`.
+The hosted version for claude.ai and ChatGPT (v2) is built too: see [Hosted (v2)](#hosted-v2).
 
 ## Why
 
@@ -293,6 +294,7 @@ All four steps are built.
 
 - Streamable HTTP transport and multi-tenant auth (OAuth, one token per owner). This is
   the v2 that would let owners connect from claude.ai without running anything locally.
+  (Since built: see Hosted (v2) below.)
 - Debtor chasing or any outbound WhatsApp from a tool.
 - Publishing to an MCP registry.
 - Reasoning-model features (`orviqo_reasoning_model`).
@@ -303,3 +305,67 @@ All four steps are built.
   list debts, record one, and get `ambiguous` back on a two-way payment.
 - CI is green with the contract tests.
 - A committed eval report shows a 0 invented-amount rate across all cases.
+
+## Hosted (v2)
+
+The same tools over Streamable HTTP with OAuth, so an owner connects Orviqo in
+claude.ai or ChatGPT by pasting one URL and never runs anything. It is mounted on
+the existing Vercel app at `/mcp` when `ORVIQO_PUBLIC_URL` is set (`docs/deploy.md`
+step 7); with it unset, nothing changes.
+
+```
+claude.ai / ChatGPT ──HTTPS──▶ /mcp            Bearer token → TokenTenant → business_id
+                     ──OAuth──▶ /.well-known/*, /register, /authorize, /token, /revoke
+owner's browser ─────────────▶ /mcp/login/{grant}   sign-in page (code, or demo)
+owner's WhatsApp ── LINK code ▶ /webhook        links the grant to the sender's number
+```
+
+**What the SDK does and what Orviqo adds.** The `mcp` SDK serves the OAuth
+endpoints and discovery metadata, dynamic client registration, PKCE, redirect-URI
+and expiry checks, and the bearer middleware. Orviqo supplies the provider
+(`orviqo/mcp/oauth.py`): storage, and the one step that is ours, proving which
+business is the owner's.
+
+**Sign-in.** `/authorize` parks the request as a *grant* and sends the owner's
+browser to a sign-in page showing a link code (`LINK 4F7K-92QD`, 8 characters
+without look-alikes, 10 minutes, single use) and a WhatsApp button that types it.
+The webhook sees the message, links the grant to the sender's number (the id
+their ledger already uses), and the page, polling, completes the redirect with an
+authorization code. Linking needs only *inbound* WhatsApp, no LLM call, and the
+confirmation reply is best-effort, so an expired send token doesn't block it.
+
+**Tokens.** Codes (5 min, single use), access tokens (1 h) and refresh tokens (30
+days, rotated on use) are random secrets stored only as SHA-256 hashes, each
+carrying its `business_id` as the token's `subject`. A code or refresh token only
+works for the client it was issued to. Revoking ends that client's whole session.
+
+**Tenant.** `TokenTenant` reads the business from the verified token on every tool
+call: the seam the stdio server was built with. Tools, rules and audit are
+unchanged; writes still go through `IntakeService.apply`.
+
+**Demo ledgers.** The sign-in page also offers "Use a demo ledger": a private
+`demo:mcp-<uuid>` business seeded with four debts (two for Chidi, to try the
+"which one?" path; two overdue). The `demo:` prefix keeps the collections worker
+from ever messaging anyone for it. They make no LLM calls; `MCP_DEMO_DAILY_LIMIT`
+caps audit entries across them per day, and the daily run deletes each one whole
+3 days after it was made (by its first audit entry), with expired sign-ins and
+tokens. The web demo's LLM quota guard doesn't count them.
+
+**Scale.** The transport is stateless with JSON responses: no session lives in an
+instance, every grant and token is in Postgres, so any serverless instance can
+serve any request. Requests must name the public host (DNS-rebinding protection).
+
+**Known limits.**
+- Real sign-in needs the WhatsApp number to receive messages from the owner, so
+  until it is public only allowlisted phones can link; everyone else can use a demo.
+- Like any device-code style flow, a link code can be phished: someone who starts a
+  sign-in and talks an owner into sending *their* code would get that owner's
+  ledger. The page and the WhatsApp confirmation name the connecting app, and codes
+  expire in 10 minutes; a confirm step on WhatsApp ("reply YES") would close it once
+  outbound messaging is reliable.
+- No per-sandbox write cap beyond the daily total; demo ledgers are small and short-lived.
+
+Tests: `tests/test_mcp_oauth.py` (provider), `tests/test_sql_oauth.py` (storage and
+clean-up), `tests/test_mcp_hosted.py` (the whole flow over HTTP: discovery,
+registration, PKCE, sign-in by WhatsApp and by demo, tenant isolation, caps),
+`tests/test_webhook_link.py` (a `LINK` message signs in and never reaches intake).

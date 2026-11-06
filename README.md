@@ -91,9 +91,17 @@ Claude Desktop (`claude_desktop_config.json`; use the absolute path to this repo
 ```
 
 Any other stdio MCP client (Cursor, VS Code, an agent framework) takes the same
-command and env. Web connectors (claude.ai, ChatGPT) need a hosted HTTP server
-with per-owner auth, which is planned. Tools, results and design are in
-[`docs/mcp.md`](docs/mcp.md).
+command and env. Tools, results and design are in [`docs/mcp.md`](docs/mcp.md).
+
+### From claude.ai or ChatGPT
+
+The hosted server needs nothing installed. Add a custom connector with the URL
+`https://<orviqo domain>/mcp` (claude.ai: **Settings → Connectors → Add custom
+connector**; ChatGPT: **Settings → Connectors**, developer mode). Signing in shows
+a code: send it to the Orviqo WhatsApp number from your own phone and you're
+connected to your ledger. No WhatsApp access? Pick **Use a demo ledger** for a
+private sandbox with sample debts, deleted after 3 days. How it works:
+[`docs/mcp.md`](docs/mcp.md#hosted-v2); deploying it: [`docs/deploy.md`](docs/deploy.md).
 
 ### Evals
 

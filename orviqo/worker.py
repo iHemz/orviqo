@@ -14,19 +14,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.sql_chases import SqlAlchemyChaseStore
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_reminders import SqlAlchemyReminderStore
+from orviqo.adapters.sql_sandbox import purge_expired_oauth, purge_sandboxes
 from orviqo.adapters.whatsapp import make_whatsapp_client
 from orviqo.config import settings
+from orviqo.domain.demo import MCP_DEMO_PREFIX
 from orviqo.services.chase_service import ChaseService
 from orviqo.services.reminder_service import ReminderService
 
 log = logging.getLogger("orviqo.worker")
+
+# Hosted-MCP demo ledgers are throwaway: deleted this long after they were made.
+DEMO_SANDBOX_TTL = timedelta(days=3)
 
 
 async def run_once() -> tuple[int, int]:
@@ -52,7 +57,12 @@ async def run_once() -> tuple[int, int]:
     )
     now = datetime.now(UTC)
     try:
-        return await reminders.run(now), await chases.run(now)
+        result = await reminders.run(now), await chases.run(now)
+        purged = await purge_sandboxes(engine, MCP_DEMO_PREFIX, now - DEMO_SANDBOX_TTL)
+        await purge_expired_oauth(engine, now)
+        if purged:
+            log.info("deleted %d expired demo sandbox(es)", purged)
+        return result
     finally:
         await whatsapp.aclose()
         await engine.dispose()

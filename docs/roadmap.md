@@ -80,10 +80,11 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 - [ ] **Dispute handling.** `InvoiceStatus.disputed` exists but nothing sets it;
       wire a "Chidi says he already paid" path.
 
-- [ ] **Hosted MCP (v2).** Streamable HTTP with per-owner OAuth, so owners can
-      connect from claude.ai or ChatGPT without running anything locally. The
-      tools already resolve their business per call (`TenantResolver`); this needs
-      a token-to-business resolver, auth, and a deployment.
+- [x] **Hosted MCP (v2).** Streamable HTTP + OAuth at `/mcp`, so owners connect
+      from claude.ai or ChatGPT without running anything. Owners sign in by sending
+      a link code to the Orviqo WhatsApp number (so, like WhatsApp itself, real
+      sign-in is limited to allowlisted phones until the number is public); anyone
+      can take a seeded demo ledger. See [mcp.md](mcp.md#hosted-v2).
 
 ## Reliability / ops backlog
 

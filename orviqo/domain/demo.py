@@ -12,6 +12,10 @@ import re
 
 DEMO_PREFIX = "demo:"
 
+# Demo ledgers taken from the hosted MCP sign-in page. Still "demo:" (so the worker
+# never messages anyone for them), and deleted a few days after they were made.
+MCP_DEMO_PREFIX = DEMO_PREFIX + "mcp-"
+
 # Sessions are minted client-side (a random UUID); accept only that shape so the
 # id is safe to store and can't be used to pick another business's id.
 _SESSION = re.compile(r"^[0-9a-f]{32}$")
