@@ -168,6 +168,11 @@ def create_app() -> FastAPI:
         if settings.whatsapp_app_secret:
             signature = request.headers.get("X-Hub-Signature-256", "")
             if not valid_signature(settings.whatsapp_app_secret, body, signature):
+                # Meta signs with the app secret: a mismatch here means WHATSAPP_APP_SECRET
+                # differs from the Meta app's (or the caller isn't Meta).
+                log.warning(
+                    "webhook rejected: X-Hub-Signature-256 %s", "bad" if signature else "missing"
+                )
                 return Response(status_code=401)
         elif not isinstance(whatsapp, LoggingWhatsAppClient):
             # Real credentials but no way to verify callers: refuse, never fail open.
@@ -175,7 +180,9 @@ def create_app() -> FastAPI:
             return Response("Webhook verification is not configured.", status_code=503)
         oauth: OrviqoOAuthProvider | None = request.app.state.oauth
         payload = json.loads(body)
-        for msg in iter_text_messages(payload):
+        messages = list(iter_text_messages(payload))
+        log.info("webhook: %d text message(s)", len(messages))  # never the content
+        for msg in messages:
             if await processed.seen(msg.id):
                 continue  # redelivered webhook — already handled
             # "LINK ABCD-2345" from the hosted MCP sign-in page: the sender's number

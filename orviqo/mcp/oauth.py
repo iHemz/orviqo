@@ -16,6 +16,7 @@ read their tenant from.
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import secrets
 from collections.abc import Callable
@@ -34,6 +35,8 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from orviqo.adapters.oauth import OAuthStore
 from orviqo.domain.oauth import Grant, IssuedToken
 from orviqo.domain.phone import normalize_phone
+
+log = logging.getLogger("orviqo.mcp.oauth")
 
 SCOPE = "ledger"
 GRANT_TTL = timedelta(minutes=10)
@@ -124,6 +127,7 @@ class OrviqoOAuthProvider:
         if code is None:
             return None
         grant = await self.link(code, normalize_phone(sender))
+        log.info("link code %s", "matched a waiting sign-in" if grant else "matched nothing")
         if grant is None:
             return (
                 "That link code isn't valid or has expired. Start connecting again from your app."
