@@ -39,7 +39,7 @@ eval = [
 entrypoint = "orviqo.api.webhook:app"
 
 [tool.vercel.scripts]
-build = "alembic upgrade head"
+build = "python -m orviqo.migrate"
 
 [build-system]
 requires = ["hatchling"]
