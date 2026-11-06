@@ -91,6 +91,8 @@ chases = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("invoice_id", String, nullable=False, index=True),
     Column("sent_at", DateTime(timezone=True), nullable=False),
+    # The reminder's WhatsApp wamid: a debtor's swipe-reply quotes it.
+    Column("message_id", String, nullable=True, index=True),
 )
 
 # A debtor's contact + consent state, so the owner can have Orviqo chase them.

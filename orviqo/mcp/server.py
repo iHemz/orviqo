@@ -72,7 +72,9 @@ date in Lagos; if the owner gave no due date, leave it out."""
 
 INSTRUCTIONS = f"""\
 Orviqo is the receivables ledger of a Nigerian small business: who owes the owner \
-money, what they've paid, and why Orviqo did what it did.
+money, what they've paid, and why Orviqo did what it did. It records only money owed \
+TO the owner: every debtor in it owes the owner. It has no record of what the owner \
+owes others, so never present its debts as debts the owner has to pay.
 
 {AMOUNT_CONVENTIONS}
 
@@ -203,7 +205,10 @@ def build_server(
         ] = None,
         limit: Annotated[int, Field(ge=1, le=_MAX_DEBTS)] = 50,
     ) -> DebtList:
-        """List the business's open (unpaid) debts, soonest due first.
+        """List money owed TO the owner: their customers' open (unpaid) debts, soonest due first.
+
+        Every name here is someone who owes the owner, never someone the owner owes.
+        Orviqo does not track what the owner owes others; say so if asked.
 
         Use this for "who owes me?", "what does Chidi owe?", and to find the
         invoice_id before update_debt or record_payment. Each debt shows what is

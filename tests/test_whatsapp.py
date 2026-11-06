@@ -26,3 +26,17 @@ def test_ignores_non_text_messages() -> None:
 def test_handles_empty_or_malformed_payload() -> None:
     assert list(iter_text_messages({})) == []
     assert list(iter_text_messages({"entry": []})) == []
+
+
+def test_a_swipe_reply_carries_the_quoted_message_id() -> None:
+    payload = _payload(
+        {
+            "type": "text",
+            "from": "2348012345678",
+            "id": "wamid.2",
+            "text": {"body": "I'll pay Friday"},
+            "context": {"from": "2348000000000", "id": "wamid.reminder"},
+        }
+    )
+    [msg] = iter_text_messages(payload)
+    assert msg.quoted_id == "wamid.reminder"

@@ -68,13 +68,13 @@ class ChaseService:
                 continue  # no contact, or they said STOP
             if await self._chased_recently(invoice.id, now):
                 continue
-            await self._whatsapp.send_template(
+            message_id = await self._whatsapp.send_template(
                 debtor.phone,
                 self._template_name,
                 _chase_params(invoice, debtor),
                 self._template_lang,
             )
-            await self._chases.record(invoice.id, now)
+            await self._chases.record(invoice.id, now, message_id)
             sent += 1
         return sent
 

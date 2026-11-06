@@ -73,9 +73,12 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 - [ ] **Payment plans / instalments.** "Chidi will pay 20k every Friday" — track an
       expected schedule per invoice; remind/chase per instalment due date. Needs a
       new domain concept (instalment schedule) and touches reminder + chase timing.
-- [ ] **Swipe-replies to a chase.** Store each chase's WhatsApp message id and pass
-      a reply that quotes it (`context.id`) to the intake agent as a strong hint
-      that it answers that reminder, sparing a clarifying question.
+- [x] **Swipe-replies to a chase.** Each chase stores its WhatsApp message id; a
+      reply that quotes it (`context.id`) marks that reminder as answered for the
+      intake agent, so "Paid 20k" sent as a reply goes to that creditor without a
+      question. Only the sender's own reminders can be matched.
+- [x] **"Who do I owe?"** is its own question, answered from the reminders the
+      sender received, never from their ledger (which is money owed *to* them).
 - [ ] **Richer debtor conversations.** Beyond STOP/ack: let a debtor's "I'll pay
       Friday" record a promise-to-pay the owner can see and that softens chasing.
 - [ ] **Payment-history query.** "How much has Chidi paid overall?" as its own

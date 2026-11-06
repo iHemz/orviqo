@@ -82,3 +82,12 @@ async def test_send_text_raises_on_api_error() -> None:
     client = CloudApiClient("tok", "555", client=_mock_client(handler))
     with pytest.raises(httpx.HTTPStatusError):
         await client.send_text("bad", "hi")
+
+
+async def test_send_template_returns_the_message_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"messages": [{"id": "wamid.tmpl"}]})
+
+    client = CloudApiClient("tok", "555", client=_mock_client(handler))
+
+    assert await client.send_template("2348012345678", "t", ["a"], "en_US") == "wamid.tmpl"

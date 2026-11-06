@@ -25,8 +25,9 @@ class CapturingWhatsApp:
     async def send_text(self, to: str, text: str) -> None:  # unused by chasing
         raise AssertionError("chasing must use a template, not free text")
 
-    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> None:
+    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> str:
         self.templates.append((to, name, params, lang))
+        return f"wamid.{len(self.templates)}"
 
     async def aclose(self) -> None:
         return None
@@ -61,6 +62,8 @@ async def test_chases_a_debtor_with_a_saved_contact() -> None:
     to, name, params, _ = wa.templates[0]
     assert to == "2348031234567" and name == TEMPLATE
     assert params[0] == "Chidi" and "80,000" in params[1]
+    [invoice] = await ledger.open_invoices("biz1")
+    assert await chases.invoice_for_message("wamid.1") == invoice.id  # for swipe-replies
 
 
 async def test_skips_a_debtor_who_opted_out() -> None:

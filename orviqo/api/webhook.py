@@ -210,7 +210,7 @@ def create_app() -> FastAPI:
                 # Everything else is the sender's own intake. Reminders they received
                 # as someone's debtor let the agent spot an answer to one ("I'll pay
                 # Friday"), which is passed on to that business instead.
-                reminders = await inbox.recent_reminders(msg.sender)
+                reminders = await inbox.recent_reminders(msg.sender, msg.quoted_id)
                 reply = await service.handle_message(msg.sender, msg.text, reminders)
                 if reply.welcome:
                     await whatsapp.send_text(msg.sender, reply.welcome)

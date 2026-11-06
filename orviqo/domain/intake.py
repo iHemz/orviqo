@@ -34,6 +34,8 @@ class Reminder(BaseModel):
     item: str | None
     due_date: date | None
     reminded_at: datetime
+    # The sender swipe-replied to this reminder on WhatsApp: their message answers it.
+    quoted: bool = False
 
 
 class IntakeAction(BaseModel):
@@ -48,6 +50,7 @@ class IntakeAction(BaseModel):
         "clarify",
         "greeting",
         "reminder_reply",
+        "my_debts",
     ]
     invoice_id: str | None = Field(
         default=None, description="Which open invoice to update/settle (update, payment)."
