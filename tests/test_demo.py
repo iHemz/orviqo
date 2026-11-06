@@ -113,6 +113,7 @@ def test_privacy_policy_is_linked_and_names_a_contact(monkeypatch) -> None:
     page = client.get("/privacy")
     assert page.status_code == 200
     assert "mailto:privacy@orviqo.example" in page.text and "{{" not in page.text
+    assert 'id="delete-your-data"' in page.text  # Meta's data deletion instructions URL
 
     monkeypatch.setattr(settings, "orviqo_contact_email", "")
     monkeypatch.setattr(settings, "whatsapp_display_number", "+234 803 123 4567")

@@ -183,8 +183,9 @@ uv run --with segno python tools/entry_qr.py --url https://<project>.vercel.app/
 While the Meta app is in Development mode only the numbers on its allowlist can
 use Orviqo. Switching it to **Live** (the toggle at the top of the app
 dashboard) needs a privacy policy URL: set
-`https://<your domain>/privacy` in App settings → Basic, with an app icon and
-category, then flip the toggle. Set `ORVIQO_CONTACT_EMAIL` first so the page
+`https://<your domain>/privacy` in App settings → Basic (and, for user data
+deletion, the instructions URL `https://<your domain>/privacy#delete-your-data`),
+with an app icon and category, then flip the toggle. Set `ORVIQO_CONTACT_EMAIL` first so the page
 names a real contact.
 
 Going Live does not need Business Verification. Without it, Meta caps how many
