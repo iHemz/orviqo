@@ -28,6 +28,10 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
 ]
+eval = [
+    "pydantic-evals>=2.9.0",
+    "pyyaml>=6.0.3",
+]
 
 # Vercel: serve the FastAPI ``app`` from this module, and apply migrations at build
 # time (the Vercel counterpart of fly.toml's release_command).
@@ -59,6 +63,7 @@ known-third-party = ["mcp"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]  # evals/ (scoring logic is tested offline)
 
 [tool.mypy]
 python_version = "3.11"
