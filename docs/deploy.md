@@ -43,7 +43,8 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `CRON_SECRET` | the random string |
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` | optional, see step 4 |
 | `WHATSAPP_DISPLAY_NUMBER` | optional, turns on `/start` and the "Chat on WhatsApp" button |
-| `ORVIQO_PUBLIC_URL` | optional, the app's public URL (e.g. `https://orviqo.example`): turns on hosted MCP, see step 7 |
+| `ORVIQO_CONTACT_EMAIL` | optional, the privacy contact shown on `/privacy` (else the WhatsApp number) |
+| `ORVIQO_PUBLIC_URL` | optional, the app's public URL (e.g. `https://orviqo.example`): turns on hosted MCP, see step 8 |
 
 4. **Deploy.** The build installs dependencies from `uv.lock`, then runs
    `alembic upgrade head` (the `[tool.vercel.scripts] build` step) against
@@ -172,7 +173,22 @@ socials:
 uv run --with segno python tools/entry_qr.py --url https://<project>.vercel.app/start
 ```
 
-## 7. Hosted MCP (claude.ai, ChatGPT)
+## 7. Going Live on Meta
+
+While the Meta app is in Development mode only the numbers on its allowlist can
+use Orviqo. Switching it to **Live** (the toggle at the top of the app
+dashboard) needs a privacy policy URL: set
+`https://<your domain>/privacy` in App settings → Basic, with an app icon and
+category, then flip the toggle. Set `ORVIQO_CONTACT_EMAIL` first so the page
+names a real contact.
+
+Going Live does not need Business Verification. Without it, Meta caps how many
+people the number can message first (reminders, digests) in a rolling 24 hours,
+about 250 at the time of writing; replies to people who messaged Orviqo are not
+capped. Verification (it needs registration documents such as a CAC
+certificate) only raises that cap, so it can wait until there are more users.
+
+## 8. Hosted MCP (claude.ai, ChatGPT)
 
 Set `ORVIQO_PUBLIC_URL` to the URL people reach the app on, exactly (scheme and
 host, no trailing slash), and redeploy. The app then also serves the MCP server

@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     # not a secret: it powers the /start click-to-chat link. Empty = /start is off.
     whatsapp_display_number: str = ""
 
+    # Where people send privacy questions and deletion requests; shown on /privacy.
+    # Empty = the page points to the WhatsApp number instead.
+    orviqo_contact_email: str = ""
+
     # Public web demo caps (messages): per browser session, and per day across all
     # sessions, so a public page can't exhaust a free-tier LLM quota.
     demo_session_limit: int = 30
