@@ -136,3 +136,43 @@ async def test_recent_reminders_from_every_creditor_newest_first() -> None:
         (WHOLESALER, 50_000),
     ]
     assert reminders[0].debtor_name == "Chidi O." and reminders[0].item == "rice"
+
+
+async def test_the_reminder_they_swipe_replied_to_is_marked_quoted() -> None:
+    w = World()
+    first = await w.owes(WHOLESALER, "Chidi", 50_000)
+    second = await w.owes(OTHER_OWNER, "Chidi O.", 80_000)
+    await w.chases.record(first, NOW - timedelta(days=2), "wamid.r1")
+    await w.chases.record(second, NOW - timedelta(hours=3), "wamid.r2")
+
+    reminders = await w.inbox.recent_reminders(RETAILER, quoted_id="wamid.r1")
+
+    assert {r.business_id: r.quoted for r in reminders} == {WHOLESALER: True, OTHER_OWNER: False}
+
+
+async def test_a_quoted_reminder_counts_even_past_the_window() -> None:
+    w = World()
+    old = await w.owes(WHOLESALER)
+    await w.chases.record(old, NOW - timedelta(days=20), "wamid.old")
+
+    assert await w.inbox.recent_reminders(RETAILER) == []
+    [quoted] = await w.inbox.recent_reminders(RETAILER, quoted_id="wamid.old")
+    assert quoted.quoted and quoted.business_id == WHOLESALER
+
+
+async def test_quoting_someone_elses_reminder_marks_nothing() -> None:
+    w = World()
+    mine = await w.owes(WHOLESALER)
+    await w.chases.record(mine, NOW - timedelta(hours=1), "wamid.mine")
+    # A reminder Orviqo sent a different number entirely.
+    await w.debtors.upsert(OTHER_OWNER, "Someone", "0809 999 9999")
+    theirs = (
+        await w.ledger.add(
+            ParsedInvoice(debtor_name="Someone", amount_ngn=9_000, confidence=1.0), OTHER_OWNER
+        )
+    ).id
+    await w.chases.record(theirs, NOW - timedelta(hours=1), "wamid.theirs")
+
+    reminders = await w.inbox.recent_reminders(RETAILER, quoted_id="wamid.theirs")
+
+    assert [(r.business_id, r.quoted) for r in reminders] == [(WHOLESALER, False)]

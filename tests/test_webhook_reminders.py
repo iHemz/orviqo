@@ -77,7 +77,8 @@ async def test_an_answer_to_the_reminder_reaches_the_wholesaler(make_agent, monk
     body = _body("I'll pay on Friday")
     assert _post(client, body, _sign(body)).status_code == 200
 
-    assert (SENDER, "Thanks, I've passed that on to them.") in whatsapp.sent
+    acks = [text for to, text in whatsapp.sent if to == SENDER]
+    assert any("reminded you about ₦50,000 for rice" in text for text in acks)
     assert (
         WHOLESALER,
         'Chidi replied to your reminder about ₦50,000 for rice: "I\'ll pay on Friday"',
@@ -103,3 +104,48 @@ def test_the_agent_sees_reminders_apart_from_the_senders_own_ledger() -> None:
     assert "Reminders this sender received" in context
     assert "reminder #inv9 · they owe ₦50,000 for rice" in context
     assert WHOLESALER not in context  # the creditor's number is none of the model's business
+
+
+def test_the_agent_is_told_which_reminder_was_quoted() -> None:
+    from orviqo.domain.intake import Reminder
+
+    reminder = Reminder(
+        invoice_id="inv9",
+        business_id=WHOLESALER,
+        debtor_name="Chidi",
+        amount_ngn=50_000,
+        item="rice",
+        due_date=None,
+        reminded_at=datetime(2026, 11, 6, tzinfo=UTC),
+        quoted=True,
+    )
+
+    assert "QUOTED: the new message is a WhatsApp reply to this reminder" in _format_context(
+        [], [], [reminder]
+    )
+
+
+async def test_a_swipe_reply_reaches_the_agent_marked_quoted(make_agent, monkeypatch) -> None:
+    import json
+
+    monkeypatch.setattr(settings, "whatsapp_app_secret", SECRET)
+    action = IntakeAction(kind="reminder_reply", confidence=0.9)
+    client, whatsapp, ledger = await _client(action, make_agent)
+    # The chase above was sent before ids were kept; this one carries its wamid.
+    chases = client.app.state.inbox._chases  # type: ignore[attr-defined]
+    [owed] = await ledger.open_invoices(WHOLESALER)
+    await chases.record(owed.id, datetime.now(UTC), "wamid.reminder")
+    message = {
+        "from": SENDER,
+        "id": "wamid.in",
+        "type": "text",
+        "text": {"body": "Paid 20k"},
+        "context": {"from": "2348000000000", "id": "wamid.reminder"},
+    }
+    body = json.dumps({"entry": [{"changes": [{"value": {"messages": [message]}}]}]}).encode()
+
+    assert _post(client, body, _sign(body)).status_code == 200
+
+    agent = client.app.state.service._agent  # type: ignore[attr-defined]
+    assert [r.quoted for r in agent.seen_reminders] == [True]
+    assert any(to == WHOLESALER and '"Paid 20k"' in text for to, text in whatsapp.sent)

@@ -26,7 +26,6 @@ from orviqo.domain.intake import IntakeAction, Reminder, Turn
 from orviqo.domain.models import Invoice, InvoiceStatus, ParsedInvoice
 
 _HISTORY_TURNS = 6
-_REMINDER_ACK = "Thanks, I've passed that on to them."
 _FALLBACK_ASK = "Sorry, I didn't fully get that — who owes you, how much, and by when?"
 _GREETING_REPLY = (
     'Hi! Tell me about a debt ("Chidi owes 50k for rice"), a payment '
@@ -98,6 +97,29 @@ def _answer_query(open_invoices: list[Invoice], debtor_name: str | None) -> str:
     return f"You have {len(open_invoices)} open debt(s):\n{lines}"
 
 
+def _my_debts(reminders: Sequence[Reminder]) -> str:
+    """What the sender owes others, as far as Orviqo knows: reminders it sent them.
+
+    Never their own ledger, which is money owed TO them.
+    """
+    note = (
+        "Orviqo keeps track of money people owe you, so it only knows what you owe from "
+        "payment reminders it has sent you."
+    )
+    if not reminders:
+        return (
+            f"{note} You haven't had any in the past week. "
+            'To see who owes you, ask "who owes me?".'
+        )
+    lines = []
+    for r in reminders:
+        due = f", due {r.due_date.isoformat()}" if r.due_date else ""
+        lines.append(
+            f"- ₦{r.amount_ngn:,} for {r.item or 'an order'}{due} (reminded {r.reminded_at:%d %b})"
+        )
+    return f"{note} Reminders you've had:\n" + "\n".join(lines)
+
+
 def _changed_fields(action: IntakeAction) -> dict:
     """Only the fields the agent actually set — never blank out existing values."""
     fields = ("debtor_name", "amount_ngn", "item", "due_date")
@@ -163,7 +185,7 @@ class IntakeService:
             return await self._record(
                 business_id, text, Decision.answered, action, Reply(text=WELCOME)
             )
-        reply = await self.apply(business_id, text, action, open_invoices)
+        reply = await self.apply(business_id, text, action, open_invoices, reminders)
         return reply.model_copy(update={"welcome": WELCOME})
 
     async def apply(
@@ -190,6 +212,9 @@ class IntakeService:
             return await self._record(business_id, source, Decision.answered, action, reply)
         if action.kind == "reminder_reply":
             return await self._relay(business_id, source, action, reminders)
+        if action.kind == "my_debts":
+            reply = Reply(text=_my_debts(reminders))
+            return await self._record(business_id, source, Decision.answered, action, reply)
         if action.kind == "query":
             return await self._answer(business_id, source, action, open_invoices)
         if action.kind == "payment":
@@ -260,8 +285,10 @@ class IntakeService:
         "I paid 20k" is the debtor's word, for the owner to confirm and record."""
         ref = (action.reminder_id or "").lstrip("#")
         reminder = next((r for r in reminders if r.invoice_id == ref), None)
-        if reminder is None and len(reminders) == 1:
-            reminder = reminders[0]  # only one it can be
+        if reminder is None:  # the one they swipe-replied to, else the only one on file
+            quoted = [r for r in reminders if r.quoted]
+            candidates = quoted or (reminders if len(reminders) == 1 else [])
+            reminder = candidates[0] if len(candidates) == 1 else None
         if reminder is None:
             return await self._ask(business_id, text, action)
         said = f'"{text}"'
@@ -273,10 +300,17 @@ class IntakeService:
             to=reminder.business_id,
             text=(
                 f"{reminder.debtor_name} replied to your reminder about ₦{reminder.amount_ngn:,}"
-                f' for {reminder.item or "their order"}: {said}'
+                f" for {reminder.item or 'their order'}: {said}"
             ),
         )
-        reply = Reply(text=_REMINDER_ACK, relay=relay)
+        # Say exactly where it went: a misread (their own customer paid them) shows at once.
+        ack = (
+            "Thanks, I've passed that on to the business that reminded you about "
+            f"₦{reminder.amount_ngn:,} for {reminder.item or 'your order'}."
+        )
+        if not reminder.quoted:
+            ack += " If it was about your own customers instead, tell me who paid."
+        reply = Reply(text=ack, relay=relay)
         return await self._record(business_id, text, Decision.noted, action, reply)
 
     async def _answer(

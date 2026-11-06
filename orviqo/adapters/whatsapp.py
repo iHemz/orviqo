@@ -27,11 +27,13 @@ log = logging.getLogger("orviqo.whatsapp")
 
 class InboundMessage(NamedTuple):
     """One inbound text message. ``id`` is the WhatsApp ``wamid`` — used to dedup
-    redelivered webhooks so a message is never processed twice."""
+    redelivered webhooks so a message is never processed twice. ``quoted_id`` is the
+    ``wamid`` of the message it swipe-replies to, if any (e.g. one of our reminders)."""
 
     sender: str
     text: str
     id: str
+    quoted_id: str | None = None
 
 
 def valid_signature(app_secret: str, body: bytes, header: str) -> bool:
@@ -56,13 +58,16 @@ def iter_text_messages(payload: dict) -> Iterator[InboundMessage]:
                         sender=msg.get("from", ""),
                         text=msg["text"]["body"],
                         id=msg.get("id", ""),
+                        quoted_id=(msg.get("context") or {}).get("id"),
                     )
 
 
 class WhatsAppClient(Protocol):
     async def send_text(self, to: str, text: str) -> None: ...
 
-    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> None: ...
+    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> str | None:
+        """Send an approved template; return its WhatsApp message id, if known."""
+        ...
 
     async def aclose(self) -> None: ...
 
@@ -73,8 +78,9 @@ class LoggingWhatsAppClient:
     async def send_text(self, to: str, text: str) -> None:
         log.info("→ %s: %s", to, text)
 
-    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> None:
+    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> str | None:
         log.info("→ %s: [template %s] %s", to, name, params)
+        return None
 
     async def aclose(self) -> None:
         return None
@@ -105,9 +111,12 @@ class CloudApiClient:
             }
         )
 
-    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> None:
-        """Send an approved template (the only way to reach a debtor outside 24h)."""
-        await self._post(
+    async def send_template(self, to: str, name: str, params: list[str], lang: str) -> str | None:
+        """Send an approved template (the only way to reach a debtor outside 24h).
+
+        Returns the message's ``wamid``, so a debtor's swipe-reply can be matched to it.
+        """
+        sent = await self._post(
             {
                 "messaging_product": "whatsapp",
                 "to": to,
@@ -124,14 +133,17 @@ class CloudApiClient:
                 },
             }
         )
+        messages = sent.get("messages") or [{}]
+        return messages[0].get("id")
 
-    async def _post(self, body: dict) -> None:
+    async def _post(self, body: dict) -> dict:
         response = await self._client.post(
             self._url,
             headers={"Authorization": f"Bearer {self._token}"},
             json=body,
         )
         response.raise_for_status()
+        return response.json() if response.content else {}
 
     async def aclose(self) -> None:
         await self._client.aclose()

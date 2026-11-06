@@ -19,6 +19,13 @@ class SqlAlchemyChaseStore:
         async with self._engine.connect() as conn:
             return (await conn.execute(stmt)).scalar()
 
-    async def record(self, invoice_id: str, at: datetime) -> None:
+    async def record(self, invoice_id: str, at: datetime, message_id: str | None = None) -> None:
         async with self._engine.begin() as conn:
-            await conn.execute(insert(chases).values(invoice_id=invoice_id, sent_at=at))
+            await conn.execute(
+                insert(chases).values(invoice_id=invoice_id, sent_at=at, message_id=message_id)
+            )
+
+    async def invoice_for_message(self, message_id: str) -> str | None:
+        stmt = select(chases.c.invoice_id).where(chases.c.message_id == message_id)
+        async with self._engine.connect() as conn:
+            return (await conn.execute(stmt)).scalar()

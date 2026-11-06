@@ -473,3 +473,80 @@ async def test_after_asking_which_the_relay_carries_the_original_message(make_ag
 
     assert reply.relay is not None
     assert reply.relay.text.endswith('"Paid 20k" (then: "the reminder")')
+
+
+async def test_a_swipe_reply_is_relayed_to_the_quoted_reminder(make_agent) -> None:
+    # Two creditors on file and no id from the agent: the quote says which one.
+    action = IntakeAction(kind="reminder_reply", confidence=0.9)
+    service = IntakeService(
+        make_agent(action),
+        InMemoryLedger(),
+        InMemoryAuditLog(),
+        InMemoryPaymentStore(),
+        InMemoryDebtorStore(),
+    )
+    quoted = _reminder("b", "w2").model_copy(update={"quoted": True})
+
+    reply = await service.handle_message("retailer", "Paid 20k", [_reminder("a", "w1"), quoted])
+
+    assert reply.relay is not None and reply.relay.to == "w2"
+
+
+# --- "who owes me?" vs "who do I owe?" --------------------------------------------
+
+
+async def test_who_do_i_owe_never_lists_the_senders_own_debtors(make_agent) -> None:
+    ledger = InMemoryLedger()
+    await ledger.add(ParsedInvoice(debtor_name="Bola", amount_ngn=30_000, confidence=1.0), "me")
+    service = IntakeService(
+        make_agent(IntakeAction(kind="my_debts", confidence=0.95)),
+        ledger,
+        InMemoryAuditLog(),
+        InMemoryPaymentStore(),
+        InMemoryDebtorStore(),
+    )
+
+    owed = await service.handle_message("me", "who do I owe?", [_reminder()])
+    nothing = await service.handle_message("me", "who do I owe?", [])
+
+    assert "Bola" not in owed.text and "30,000" not in owed.text  # their debtor, not a debt
+    assert "₦50,000 for rice, due 2026-10-30" in owed.text
+    assert "Bola" not in nothing.text and "who owes me?" in nothing.text
+
+
+async def test_who_owes_me_never_lists_reminders_the_sender_received(make_agent) -> None:
+    ledger = InMemoryLedger()
+    await ledger.add(ParsedInvoice(debtor_name="Bola", amount_ngn=30_000, confidence=1.0), "me")
+    service = IntakeService(
+        make_agent(IntakeAction(kind="query", confidence=0.95)),
+        ledger,
+        InMemoryAuditLog(),
+        InMemoryPaymentStore(),
+        InMemoryDebtorStore(),
+    )
+
+    reply = await service.handle_message("me", "who owes me?", [_reminder()])
+
+    assert "Bola" in reply.text
+    assert "50,000" not in reply.text and "rice" not in reply.text
+
+
+async def test_the_ack_says_where_a_reply_went_and_how_to_correct_it(make_agent) -> None:
+    def service() -> IntakeService:
+        action = IntakeAction(kind="reminder_reply", confidence=0.9)
+        return IntakeService(
+            make_agent(action),
+            InMemoryLedger(),
+            InMemoryAuditLog(),
+            InMemoryPaymentStore(),
+            InMemoryDebtorStore(),
+        )
+
+    plain = await service().handle_message("me", "Paid 20k", [_reminder()])
+    quoted = await service().handle_message(
+        "me", "Paid 20k", [_reminder().model_copy(update={"quoted": True})]
+    )
+
+    assert "reminded you about ₦50,000 for rice" in plain.text
+    assert "tell me who paid" in plain.text  # a guess: easy to correct
+    assert "tell me who paid" not in quoted.text  # they replied to it directly

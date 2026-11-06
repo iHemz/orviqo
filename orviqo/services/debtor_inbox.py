@@ -76,9 +76,18 @@ class DebtorInboxService:
             await self._notify_owner(debtor, f"{debtor.name} opted out of reminders.")
         return _STOP_REPLY
 
-    async def recent_reminders(self, sender_phone: str) -> list[Reminder]:
-        """Reminders Orviqo sent this number within the window, newest first."""
+    async def recent_reminders(
+        self, sender_phone: str, quoted_id: str | None = None
+    ) -> list[Reminder]:
+        """Reminders Orviqo sent this number within the window, newest first.
+
+        ``quoted_id`` is the WhatsApp id the message swipe-replies to. If it is one of
+        this sender's reminders, that one is marked ``quoted`` and included even when
+        older than the window: the reply itself shows what it answers. A quoted id
+        that isn't a reminder to this sender is ignored.
+        """
         since = self._now() - self._window
+        quoted_invoice = await self._chases.invoice_for_message(quoted_id) if quoted_id else None
         reminders: list[Reminder] = []
         for debtor in await self._debtors.find_all_by_phone(sender_phone):
             for invoice in await self._ledger.open_invoices(debtor.business_id):
@@ -88,7 +97,8 @@ class DebtorInboxService:
                 if at is None:
                     continue
                 at = at if at.tzinfo else at.replace(tzinfo=UTC)  # SQLite: naive UTC
-                if at >= since:
+                quoted = invoice.id == quoted_invoice
+                if at >= since or quoted:
                     reminders.append(
                         Reminder(
                             invoice_id=invoice.id,
@@ -98,6 +108,7 @@ class DebtorInboxService:
                             item=invoice.item,
                             due_date=invoice.due_date,
                             reminded_at=at,
+                            quoted=quoted,
                         )
                     )
         return sorted(reminders, key=lambda r: r.reminded_at, reverse=True)

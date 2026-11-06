@@ -34,3 +34,13 @@ async def test_records_and_reads_back_the_latest_chase(chases: SqlAlchemyChaseSt
     # SQLite returns naive datetimes (Postgres returns aware); compare as UTC.
     assert (got if got.tzinfo else got.replace(tzinfo=UTC)) == later  # most recent wins
     assert await chases.last_chase_at("inv2") is None  # scoped per invoice
+
+
+async def test_a_reminder_message_id_leads_back_to_its_invoice(
+    chases: SqlAlchemyChaseStore,
+) -> None:
+    await chases.record("inv1", datetime(2026, 7, 20, tzinfo=UTC), "wamid.r1")
+    await chases.record("inv2", datetime(2026, 7, 21, tzinfo=UTC))  # sent before ids were kept
+
+    assert await chases.invoice_for_message("wamid.r1") == "inv1"
+    assert await chases.invoice_for_message("wamid.other") is None

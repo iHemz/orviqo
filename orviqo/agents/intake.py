@@ -39,8 +39,8 @@ Choose exactly one `kind`:
 - "update": the message adds detail to, corrects, or answers a question about an
   EXISTING open invoice (match it by debtor name or clear context). Set
   `invoice_id` to that invoice's id and fill ONLY the fields that change.
-- "query": the owner is ASKING about existing debts, not recording one ("what
-  does X owe?", "how much does X owe me?", "who owes me?", "list my debts"). Set
+- "query": the owner is ASKING about money owed TO them, not recording one ("what
+  does X owe?", "how much does X owe me?", "who owes me?", "list my debtors"). Set
   `debtor_name` if they ask about a specific person, otherwise leave it null. Do
   not fill amount/item/due — the answer comes from the ledger, not from you.
 - "payment": the owner says a debtor PAID them, fully or partly ("Chidi paid
@@ -56,6 +56,9 @@ Choose exactly one `kind`:
   the open invoices or recent conversation. Ask ONE short question.
 - "greeting": a hello, thanks, or small talk with no debt, payment or question
   in it ("Hi Orviqo", "good morning", "thanks"). Set nothing else.
+- "my_debts": the sender asks what THEY owe other people ("who do I owe?", "how
+  much do I owe?", "what do I owe Chidi?"). Never "query": "query" is only ever
+  about people who owe the sender. Set nothing else.
 - "reminder_reply": ONLY when "Reminders this sender received" is listed below.
   The sender is answering a reminder about money THEY owe another business
   ("I'll pay Friday", "I've sent it", "I paid 20k already", "I don't owe that").
@@ -71,6 +74,12 @@ sender paying the reminder or one of their debtors paying them: never fill in a
 debtor for it. If you truly cannot tell whether a message answers the reminder or
 is about their own customers, use "clarify" and ask which one, naming the
 reminder's amount (e.g. "Is that about the ₦50,000 reminder, or did someone pay you?").
+Without a QUOTED reminder, such an unnamed payment ("Paid 20k", "done") is ALWAYS
+"clarify": relaying it could tell a business they were paid when they weren't.
+A reminder marked QUOTED is the one the sender replied to directly in WhatsApp:
+their message answers it, so use "reminder_reply" for it even when short or
+unnamed ("Paid 20k", "done", "ok"). Only a message plainly about their own
+customers ("Ada owes me 20k") is still their own business.
 
 A "query" must be a QUESTION. A statement that someone owes or hasn't paid
 ("Mama Nkechi never paid", "Tunde still owes me") is never a query: record it
@@ -114,9 +123,14 @@ def _format_context(
         )
         for r in reminders:
             due = r.due_date.isoformat() if r.due_date else "no due date"
+            quoted = (
+                " · QUOTED: the new message is a WhatsApp reply to this reminder"
+                if r.quoted
+                else ""
+            )
             lines.append(
                 f"- reminder #{r.invoice_id} · they owe ₦{r.amount_ngn:,} for "
-                f"{r.item or 'an order'} · due {due} · reminded {r.reminded_at:%Y-%m-%d}"
+                f"{r.item or 'an order'} · due {due} · reminded {r.reminded_at:%Y-%m-%d}{quoted}"
             )
     if history:
         lines.append("")
