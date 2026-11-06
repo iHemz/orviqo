@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Sequence
 from datetime import date
 
 import httpx
@@ -24,7 +25,7 @@ from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
 from orviqo.config import settings
-from orviqo.domain.intake import IntakeAction, Turn
+from orviqo.domain.intake import IntakeAction, Reminder, Turn
 from orviqo.domain.models import Invoice
 
 _SYSTEM_PROMPT = """
@@ -55,6 +56,21 @@ Choose exactly one `kind`:
   the open invoices or recent conversation. Ask ONE short question.
 - "greeting": a hello, thanks, or small talk with no debt, payment or question
   in it ("Hi Orviqo", "good morning", "thanks"). Set nothing else.
+- "reminder_reply": ONLY when "Reminders this sender received" is listed below.
+  The sender is answering a reminder about money THEY owe another business
+  ("I'll pay Friday", "I've sent it", "I paid 20k already", "I don't owe that").
+  Set `reminder_id` to that reminder's id. Set nothing else: Orviqo passes the
+  message on to that business; it is never recorded in anyone's ledger.
+
+The sender can be someone's debtor AND an owner with debtors of their own: traders
+owe each other all the time. A reminder they received is about THEIR debt; their
+own ledger is about people who owe THEM. "Ada owes me 20k" or "Bola paid me" is
+their own business (create / payment / ...), even right after a reminder. A
+payment that doesn't say WHO paid ("Paid 20k", "sent 10k", "done") could be the
+sender paying the reminder or one of their debtors paying them: never fill in a
+debtor for it. If you truly cannot tell whether a message answers the reminder or
+is about their own customers, use "clarify" and ask which one, naming the
+reminder's amount (e.g. "Is that about the ₦50,000 reminder, or did someone pay you?").
 
 A "query" must be a QUESTION. A statement that someone owes or hasn't paid
 ("Mama Nkechi never paid", "Tunde still owes me") is never a query: record it
@@ -78,7 +94,9 @@ question — but so is asking for what you already know.
 """.strip()
 
 
-def _format_context(open_invoices: list[Invoice], history: list[Turn]) -> str:
+def _format_context(
+    open_invoices: list[Invoice], history: list[Turn], reminders: Sequence[Reminder] = ()
+) -> str:
     lines: list[str] = []
     if open_invoices:
         lines.append("Open invoices (id · debtor · amount · item · due):")
@@ -88,6 +106,18 @@ def _format_context(open_invoices: list[Invoice], history: list[Turn]) -> str:
             lines.append(f"- #{inv.id} · {inv.debtor_name} · ₦{inv.amount_ngn:,} · {item} · {due}")
     else:
         lines.append("No open invoices for this business yet.")
+    if reminders:
+        lines.append("")
+        lines.append(
+            "Reminders this sender received (money THEY owe other businesses; "
+            "not part of their own ledger):"
+        )
+        for r in reminders:
+            due = r.due_date.isoformat() if r.due_date else "no due date"
+            lines.append(
+                f"- reminder #{r.invoice_id} · they owe ₦{r.amount_ngn:,} for "
+                f"{r.item or 'an order'} · due {due} · reminded {r.reminded_at:%Y-%m-%d}"
+            )
     if history:
         lines.append("")
         lines.append("Recent conversation (oldest first):")
@@ -158,10 +188,14 @@ class PydanticAIIntakeAgent:
             return f"Today's date is {date.today().isoformat()}."
 
     async def decide(
-        self, message: str, open_invoices: list[Invoice], history: list[Turn]
+        self,
+        message: str,
+        open_invoices: list[Invoice],
+        history: list[Turn],
+        reminders: Sequence[Reminder] = (),
     ) -> IntakeAction:
         prompt = (
-            f"{_format_context(open_invoices, history)}\n\n"
+            f"{_format_context(open_invoices, history, reminders)}\n\n"
             f'New message from the owner: "{message}"\n'
             "Decide the action."
         )

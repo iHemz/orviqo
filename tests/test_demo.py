@@ -83,7 +83,7 @@ async def test_daily_cap_counts_every_demo_session(make_agent) -> None:
 
 
 class FailingAgent:
-    async def decide(self, message, open_invoices, history):
+    async def decide(self, message, open_invoices, history, reminders=()):
         raise RuntimeError("429 quota exceeded")
 
 

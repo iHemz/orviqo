@@ -7,13 +7,20 @@ not on Pydantic AI. The agent decides an action given the message *and* context
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
-from orviqo.domain.intake import IntakeAction, Turn
+from orviqo.domain.intake import IntakeAction, Reminder, Turn
 from orviqo.domain.models import Invoice
 
 
 class IntakeAgent(Protocol):
     async def decide(
-        self, message: str, open_invoices: list[Invoice], history: list[Turn]
-    ) -> IntakeAction: ...
+        self,
+        message: str,
+        open_invoices: list[Invoice],
+        history: list[Turn],
+        reminders: Sequence[Reminder] = (),
+    ) -> IntakeAction:
+        """``reminders``: payment reminders the sender recently received as a debtor."""
+        ...

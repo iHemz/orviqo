@@ -98,7 +98,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         whatsapp,
         ledger=ledger,
         chases=SqlAlchemyChaseStore(engine),
-        audit=audit,
     )
     app.state.processed = SqlAlchemyProcessedMessageStore(engine)
     app.state.whatsapp = whatsapp
@@ -195,23 +194,32 @@ def create_app() -> FastAPI:
             # "LINK ABCD-2345" from the hosted MCP sign-in page: the sender's number
             # proves which ledger is theirs. No intake, so no LLM call.
             link_reply = await oauth.link_from_message(msg.sender, msg.text) if oauth else None
-            # A known debtor's reply (e.g. STOP) is handled here, not as owner intake.
-            debtor_reply = None
+            # STOP opts the number out of every business that chases it.
+            stop_reply = None
             if link_reply is None:
-                debtor_reply = await inbox.handle_if_debtor(msg.sender, msg.text)
+                stop_reply = await inbox.handle_stop(msg.sender, msg.text)
             if link_reply is not None:
                 # Already linked: a failed confirmation mustn't make WhatsApp redeliver.
                 try:
                     await whatsapp.send_text(msg.sender, link_reply)
                 except Exception:
                     log.exception("couldn't send the link confirmation")
-            elif debtor_reply is not None:
-                await whatsapp.send_text(msg.sender, debtor_reply)
+            elif stop_reply is not None:
+                await whatsapp.send_text(msg.sender, stop_reply)
             else:
-                reply = await service.handle_message(msg.sender, msg.text)
+                # Everything else is the sender's own intake. Reminders they received
+                # as someone's debtor let the agent spot an answer to one ("I'll pay
+                # Friday"), which is passed on to that business instead.
+                reminders = await inbox.recent_reminders(msg.sender)
+                reply = await service.handle_message(msg.sender, msg.text, reminders)
                 if reply.welcome:
                     await whatsapp.send_text(msg.sender, reply.welcome)
                 await whatsapp.send_text(msg.sender, reply.text)
+                if reply.relay is not None:
+                    try:  # best-effort, like every owner notification
+                        await whatsapp.send_text(reply.relay.to, reply.relay.text)
+                    except Exception:
+                        log.exception("couldn't pass a reminder reply on")
             # Mark only after a clean handle: a failure above leaves it unmarked so
             # WhatsApp's retry reprocesses it, rather than dropping the message.
             await processed.mark(msg.id)

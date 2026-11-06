@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any
@@ -39,7 +39,7 @@ from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
 from orviqo.config import ConfigError, settings
 from orviqo.domain.audit import Decision
-from orviqo.domain.intake import IntakeAction, Turn
+from orviqo.domain.intake import IntakeAction, Reminder, Turn
 from orviqo.domain.models import Invoice
 from orviqo.mcp.schemas import (
     DebtList,
@@ -100,7 +100,11 @@ class _NoParser:
     """The intake agent slot, unused: MCP callers send typed fields, not text."""
 
     async def decide(
-        self, message: str, open_invoices: list[Invoice], history: list[Turn]
+        self,
+        message: str,
+        open_invoices: list[Invoice],
+        history: list[Turn],
+        reminders: Sequence[Reminder] = (),
     ) -> IntakeAction:
         raise RuntimeError("The MCP server executes typed actions; it never parses text.")
 

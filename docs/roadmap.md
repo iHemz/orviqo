@@ -19,8 +19,8 @@ running balance → two-way replies**, multi-tenant by the owner's WhatsApp numb
   `/cron/collections`; a worker process on a container host).
 - **Debtor-chasing** — owner-attested consent: save a debtor's number
   (`contact` intent), chase overdue debts via an approved template, honor STOP.
-- **Owner-notification** — a chased debtor's reply (within 72h of the chase) is
-  relayed to the owner who chased them, and only them.
+- **Owner-notification** — a debtor's answer to a reminder ("I'll pay Friday") is
+  relayed to the owner who sent it, and only them; never recorded as a payment.
 - **Inbound idempotency** — redelivered webhooks are deduped by message id.
 - **Landing page + live web demo** — `/` serves a page whose chat runs the real
   agent and ledger as a private `demo:<session>` business, so anyone (recruiters
@@ -73,10 +73,9 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 - [ ] **Payment plans / instalments.** "Chidi will pay 20k every Friday" — track an
       expected schedule per invoice; remind/chase per instalment due date. Needs a
       new domain concept (instalment schedule) and touches reminder + chase timing.
-- [ ] **Swipe-replies to a chase.** Store each chase's WhatsApp message id and
-      treat a reply that quotes it (`context.id`) as a debtor reply even when the
-      sender runs their own ledger. Today such a person's reply to a chase goes to
-      their own ledger (STOP still opts them out).
+- [ ] **Swipe-replies to a chase.** Store each chase's WhatsApp message id and pass
+      a reply that quotes it (`context.id`) to the intake agent as a strong hint
+      that it answers that reminder, sparing a clarifying question.
 - [ ] **Richer debtor conversations.** Beyond STOP/ack: let a debtor's "I'll pay
       Friday" record a promise-to-pay the owner can see and that softens chasing.
 - [ ] **Payment-history query.** "How much has Chidi paid overall?" as its own
@@ -110,8 +109,10 @@ Every inbound message is keyed by the sender's WhatsApp id as `business_id`, so
 each owner who messages the Orviqo number gets their own isolated ledger, audit
 log, debtors, and payments — no signup step. One number can be both: a retailer
 who owes a wholesaler is an owner too. So a saved debtor contact never captures a
-number; only STOP (opts out of every business that saved it) or a reply within
-72h of a chase is handled as a debtor's message, and an owner's own messages always
-reach their ledger (see `DebtorInboxService`). This means onboarding a new
+number: STOP opts it out of every business that saved it, and everything else is
+the sender's own intake. Reminders they received recently are context for the
+intake agent, which tells an answer to one ("I'll pay Friday", relayed to that
+business) from their own business ("Ada owes me 20k", recorded at once), and asks
+when it can't tell (see `DebtorInboxService`). This means onboarding a new
 owner is literally "message the number" — which is why the **entry point** and
 **first-run greeting** above are what's missing, not the tenancy model.

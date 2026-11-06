@@ -92,7 +92,6 @@ def _client(make_agent, whatsapp) -> TestClient:
         whatsapp,
         ledger=InMemoryLedger(),
         chases=InMemoryChaseStore(),
-        audit=InMemoryAuditLog(),
     )
     app.state.processed = InMemoryProcessedMessageStore()
     app.state.whatsapp = whatsapp

@@ -7,7 +7,7 @@ new invoice, update an existing one, or ask a clarifying question.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -20,10 +20,35 @@ class Turn(BaseModel):
     bot: str
 
 
+class Reminder(BaseModel):
+    """A payment reminder this sender recently received from another business.
+
+    Context for telling a reply to that reminder apart from the sender's own
+    business: on WhatsApp one number is often both someone's debtor and an owner.
+    """
+
+    invoice_id: str  # the creditor's invoice the reminder was about
+    business_id: str  # the creditor (the owner who chased)
+    debtor_name: str  # how the creditor saved the sender
+    amount_ngn: int
+    item: str | None
+    due_date: date | None
+    reminded_at: datetime
+
+
 class IntakeAction(BaseModel):
     """The agent's decision for one inbound message, given the context."""
 
-    kind: Literal["create", "update", "query", "payment", "contact", "clarify", "greeting"]
+    kind: Literal[
+        "create",
+        "update",
+        "query",
+        "payment",
+        "contact",
+        "clarify",
+        "greeting",
+        "reminder_reply",
+    ]
     invoice_id: str | None = Field(
         default=None, description="Which open invoice to update/settle (update, payment)."
     )
@@ -38,6 +63,10 @@ class IntakeAction(BaseModel):
     item: str | None = None
     due_date: date | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reminder_id: str | None = Field(
+        default=None,
+        description="Which received reminder a 'reminder_reply' answers (its #id).",
+    )
     clarify: str | None = Field(
         default=None, description="The question to ask (only for kind='clarify')."
     )
