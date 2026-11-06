@@ -10,17 +10,33 @@ debtor can check it's genuine and knows who to pay.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from pydantic import BaseModel
+
+# WhatsApp lets a business send free-form messages, free of charge, for 24 hours
+# after the person last messaged it. An hour's margin covers a slow send.
+SERVICE_WINDOW = timedelta(hours=23)
 
 
 class BusinessProfile(BaseModel):
     business_id: str  # the owner's WhatsApp number (wa_id digits)
     name: str | None = None  # set by the owner; wins
     whatsapp_name: str | None = None  # the owner's WhatsApp profile name
+    last_message_at: datetime | None = None  # when they last messaged Orviqo
 
     @property
     def display_name(self) -> str | None:
         return self.name or self.whatsapp_name
+
+    def can_message_freely(self, now: datetime) -> bool:
+        """Inside WhatsApp's 24-hour window, so a plain text reaches them (and is free)."""
+        last = self.last_message_at
+        if last is None:
+            return False
+        if last.tzinfo is None:  # SQLite returns naive datetimes; they are UTC
+            last = last.replace(tzinfo=UTC)
+        return now - last < SERVICE_WINDOW
 
 
 def identify(business_id: str, profile: BusinessProfile | None) -> str:

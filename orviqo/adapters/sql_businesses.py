@@ -23,7 +23,10 @@ class SqlAlchemyBusinessStore:
         if row is None:
             return None
         return BusinessProfile(
-            business_id=row.business_id, name=row.name, whatsapp_name=row.whatsapp_name
+            business_id=row.business_id,
+            name=row.name,
+            whatsapp_name=row.whatsapp_name,
+            last_message_at=row.last_message_at,
         )
 
     async def set_name(self, business_id: str, name: str) -> BusinessProfile:
@@ -32,10 +35,15 @@ class SqlAlchemyBusinessStore:
         assert profile is not None
         return profile
 
-    async def note_whatsapp_name(self, business_id: str, whatsapp_name: str) -> None:
-        await self._upsert(business_id, whatsapp_name=whatsapp_name)
+    async def note_message(
+        self, business_id: str, at: datetime, whatsapp_name: str | None = None
+    ) -> None:
+        values: dict[str, object] = {"last_message_at": at}
+        if whatsapp_name:
+            values["whatsapp_name"] = whatsapp_name
+        await self._upsert(business_id, **values)
 
-    async def _upsert(self, business_id: str, **values: str) -> None:
+    async def _upsert(self, business_id: str, **values: object) -> None:
         values_at = {**values, "updated_at": datetime.now(UTC)}
         async with self._engine.begin() as conn:
             updated = await conn.execute(

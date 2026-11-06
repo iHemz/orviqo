@@ -28,6 +28,7 @@ from orviqo.services.intake_service import IntakeService
 
 OWNER = "2348031234567"
 DEBTOR = "2348070000009"
+AT = datetime(2026, 11, 6, 9, tzinfo=UTC)
 
 
 def test_identify_shows_the_name_with_the_number() -> None:
@@ -76,9 +77,9 @@ async def test_a_chosen_name_survives_later_whatsapp_names(
     sql_store: SqlAlchemyBusinessStore,
 ) -> None:
     assert await sql_store.get(OWNER) is None
-    await sql_store.note_whatsapp_name(OWNER, "Ada O.")
+    await sql_store.note_message(OWNER, AT, "Ada O.")
     await sql_store.set_name(OWNER, "Ada Fabrics")
-    await sql_store.note_whatsapp_name(OWNER, "Ada 🧵")  # they change their WhatsApp name
+    await sql_store.note_message(OWNER, AT, "Ada 🧵")  # they change their WhatsApp name
 
     profile = await sql_store.get(OWNER)
     assert profile is not None
@@ -111,7 +112,7 @@ async def test_owner_sets_their_business_name(make_agent) -> None:
 
 async def test_saving_a_contact_says_how_reminders_will_introduce_the_owner(make_agent) -> None:
     businesses = InMemoryBusinessStore()
-    await businesses.note_whatsapp_name(OWNER, "Ada O.")
+    await businesses.note_message(OWNER, AT, "Ada O.")
     action = IntakeAction(
         kind="contact", debtor_name="Chidi", phone="0807 000 0009", confidence=0.95
     )
@@ -170,7 +171,7 @@ async def test_the_chase_names_the_creditor() -> None:
             return "wamid.1"
 
     businesses, debtors, ledger = InMemoryBusinessStore(), InMemoryDebtorStore(), InMemoryLedger()
-    await businesses.note_whatsapp_name(OWNER, "Ada O.")
+    await businesses.note_message(OWNER, AT, "Ada O.")
     await debtors.upsert(OWNER, "Chidi", DEBTOR)
     await ledger.add(
         ParsedInvoice(

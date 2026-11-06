@@ -43,10 +43,14 @@ async def run_once() -> tuple[int, int]:
     engine = make_engine(settings.database_url)
     whatsapp = make_whatsapp_client(settings)
     ledger = SqlAlchemyLedger(engine)
+    businesses = SqlAlchemyBusinessStore(engine)
     reminders = ReminderService(
         ledger=ledger,
         reminders=SqlAlchemyReminderStore(engine),
         whatsapp=whatsapp,
+        businesses=businesses,
+        template_name=settings.whatsapp_digest_template,
+        template_lang=settings.whatsapp_template_lang,
     )
     chases = ChaseService(
         ledger=ledger,
@@ -55,7 +59,7 @@ async def run_once() -> tuple[int, int]:
         whatsapp=whatsapp,
         template_name=settings.whatsapp_chase_template,
         template_lang=settings.whatsapp_template_lang,
-        businesses=SqlAlchemyBusinessStore(engine),
+        businesses=businesses,
     )
     now = datetime.now(UTC)
     try:

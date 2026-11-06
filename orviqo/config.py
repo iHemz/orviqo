@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     # the 24h window. Empty = chasing off (the worker skips it) until registered.
     whatsapp_chase_template: str = ""
     whatsapp_template_lang: str = "en_US"
+    # Owner digests go as free text when the owner messaged in the last 24h, and
+    # otherwise as this approved template. Empty = those owners are skipped.
+    whatsapp_digest_template: str = ""
 
     # The business an `orviqo-mcp` stdio process serves: the owner's WhatsApp
     # number, the same id the webhook files their messages under. Empty = it won't start.
