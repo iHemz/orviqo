@@ -95,6 +95,26 @@ command and env. Web connectors (claude.ai, ChatGPT) need a hosted HTTP server
 with per-owner auth, which is planned. Tools, results and design are in
 [`docs/mcp.md`](docs/mcp.md).
 
+### Evals
+
+`make eval` has a real model (Gemini, free tier) drive `orviqo-mcp` through 27
+owner conversations, each on a fresh ledger, and scores the result with
+deterministic checks: no LLM judge. First run, Gemini Flash-Lite, 2026-11-06:
+
+| Metric | Result |
+|--------|--------|
+| Invented-amount rate (must be 0) | **0 / 12** write calls carrying an amount |
+| Cases passed | 26 / 27 |
+| Tool-selection accuracy | 21 / 22 |
+| Clarification recall | 5 / 5 |
+| Over-asking | 0 / 5 |
+
+The one miss: told "Add a debt for Bola, she'll pay next Friday", the model tried
+`record_debt` with no amount. The schema rejected it, nothing was written, and the
+model then asked how much. The cases are synthetic and the set is small: a
+regression check, not evidence of real-world accuracy. Full report in
+[`evals/results/`](evals/results/).
+
 ## Models
 
 The intake model is one env var, `ORVIQO_INTAKE_MODEL`: a Pydantic AI model

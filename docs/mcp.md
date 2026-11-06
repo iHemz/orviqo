@@ -1,8 +1,8 @@
 # Orviqo MCP server + evals
 
-Status: **steps 1 to 3 built** (refactor, read tools, write tools, contract tests).
-Step 4 (model evals) is next. Run it with `uv run orviqo-mcp`; setup for Claude Code
-and Claude Desktop is in the README ("Use it from Claude").
+Status: **built** (all four steps). Run the server with `uv run orviqo-mcp` (setup
+for Claude Code and Claude Desktop is in the README, "Use it from Claude") and the
+evals with `make eval`. First report: `evals/results/2026-11-06-google-gemini-flash-lite-latest.md`.
 
 ## Why
 
@@ -215,6 +215,28 @@ end up right, and does it ever write a number nobody said?**
 - Run with `make eval` (`uv run python -m evals.run`). Write a report to
   `evals/results/<date>-<model>.md` and commit it.
 
+As built (`evals/`):
+
+- **The MCP side is the official SDK client**, not Pydantic AI's MCP toolset. Each case
+  spawns `orviqo-mcp` over stdio with `mcp.Client`, and its tools (name, description,
+  schema) and server instructions are handed to a Pydantic AI agent unchanged. Pydantic
+  AI 2.9's toolset doesn't support the 2.x SDK (it reads 1.x attribute names), and
+  upgrading it would also upgrade the production intake agent. The agent gets only a
+  one-line persona, so what's tested is what the server tells the model.
+- **Free and isolated.** Runs on Gemini's free tier with `EVAL_GOOGLE_API_KEY`, a key
+  from a *separate* AI Studio project: free quotas are per project, and Gemini Flash's is
+  only 20 requests a day, so sharing `GOOGLE_API_KEY` would starve the live demo. The
+  default chain is Flash-Lite, then Flash. `--shared-key` opts into the app's key.
+- **Fails loudly, never hangs.** Overloads and per-minute limits are retried; a spent
+  daily quota stops the run (exit 2, no report, since a partial run would misstate
+  every rate); a case that runs past 3 minutes fails.
+- **Scoring is offline-tested.** `evals/checks.py` (amount parsing, due dates,
+  invented-amount detection, the per-case checks) has no model or eval-framework
+  imports and is covered by `tests/test_eval_checks.py` in CI.
+- An invented amount is a write call whose `amount_ngn` appears neither in the owner's
+  messages (with shorthand expanded) nor in the seeded ledger. It's counted on every
+  write call, including ones the server refused.
+
 ### Cases (start with ~25, in `evals/cases.yaml`)
 
 | Category | Example | Pass means |
@@ -258,7 +280,7 @@ the set is small: a regression check, not evidence of real-world accuracy.
 
 ## Build order (one PR each)
 
-Steps 1 to 3 are done; step 4 is next.
+All four steps are built.
 
 1. **Refactor.** `IntakeService.apply` public, structured result, `source` for audit.
    Existing tests green, new unit tests for `apply`.
