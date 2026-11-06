@@ -29,9 +29,13 @@ BUSY_REPLY = "Sorry, the AI behind this demo is busy right now. Please try again
 _WHATSAPP_CTA = '<a class="btn btn-secondary" href="/start">Chat on WhatsApp</a>'
 
 
+# When the privacy policy last changed: bump it with any edit to privacy.html.
+PRIVACY_EFFECTIVE = "6 November 2026"
+
+
 @cache
-def _page_template() -> str:
-    return (Path(__file__).parent / "site.html").read_text(encoding="utf-8")
+def _page(name: str) -> str:
+    return (Path(__file__).parent / name).read_text(encoding="utf-8")
 
 
 class DemoMessage(BaseModel):
@@ -43,9 +47,26 @@ class DemoMessage(BaseModel):
 def landing() -> HTMLResponse:
     # The WhatsApp button only appears once a public number is configured.
     cta = _WHATSAPP_CTA if settings.whatsapp_display_number else ""
-    page = _page_template().replace("{{whatsapp_cta}}", cta)
+    page = _page("site.html").replace("{{whatsapp_cta}}", cta)
     page = page.replace("{{session_limit}}", escape(str(settings.demo_session_limit)))
     return HTMLResponse(page)
+
+
+@router.get("/privacy", response_class=HTMLResponse)
+def privacy() -> HTMLResponse:
+    """The privacy policy: Meta needs its URL before the app can go Live."""
+    page = _page("privacy.html").replace("{{effective_date}}", PRIVACY_EFFECTIVE)
+    return HTMLResponse(page.replace("{{contact}}", _privacy_contact()))
+
+
+def _privacy_contact() -> str:
+    email, number = settings.orviqo_contact_email, settings.whatsapp_display_number
+    if email:
+        safe = escape(email)
+        return f'Email <a href="mailto:{safe}">{safe}</a> with any question or request.'
+    if number:
+        return f"Message Orviqo on WhatsApp at {escape(number)} with any question or request."
+    return 'Open an issue at <a href="https://github.com/iHemz/orviqo">github.com/iHemz/orviqo</a>.'
 
 
 @router.post("/demo/message")
