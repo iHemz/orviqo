@@ -85,9 +85,10 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
       he'll pay on the 15th") holds reminders about that debt through the date,
       then chasing resumes on its own if it's still unpaid. The owner is told, and
       "who owes me?" shows "promised by 13 Nov".
-- [ ] **Payment-history query.** "How much has Chidi paid overall?" as its own
-      answer (the data is in the `payments` ledger; needs intent routing so it's
-      not confused with "what does Chidi owe?").
+- [x] **Payment history.** "How much has Chidi paid?" lists each payment with its
+      date and item across all of Chidi's debts, settled ones included, then what
+      is still owed. It's its own `history` intent, separate from "what does Chidi
+      owe?".
 - [x] **Disputes.** A debtor's "I don't owe that" pauses reminders about the debt
       and tells the owner, who says "keep chasing Chidi" once it's sorted. The debt
       stays open in the owner's ledger, marked disputed (a hold, not

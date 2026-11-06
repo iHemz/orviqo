@@ -43,6 +43,9 @@ Choose exactly one `kind`:
   does X owe?", "how much does X owe me?", "who owes me?", "list my debtors"). Set
   `debtor_name` if they ask about a specific person, otherwise leave it null. Do
   not fill amount/item/due — the answer comes from the ledger, not from you.
+- "history": the owner asks what a debtor has PAID so far, not what they owe
+  ("how much has Chidi paid?", "show me Ada's payments", "when did Tunde last
+  pay?"). Set `debtor_name`. "What does Chidi owe?" is a "query", not this.
 - "payment": the owner says a debtor PAID them, fully or partly ("Chidi paid
   50k", "Randi cleared her debt", "Ada settled in full"). Set `invoice_id` to the
   matching open invoice and `debtor_name`. For a specific amount, set `amount_ngn`

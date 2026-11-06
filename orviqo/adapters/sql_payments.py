@@ -28,6 +28,15 @@ class SqlAlchemyPaymentStore:
             result = await conn.execute(stmt)
             return [self._to_payment(row) for row in result]
 
+    async def for_invoices(self, invoice_ids: list[str]) -> list[Payment]:
+        if not invoice_ids:
+            return []
+        stmt = (
+            select(payments).where(payments.c.invoice_id.in_(invoice_ids)).order_by(payments.c.id)
+        )
+        async with self._engine.connect() as conn:
+            return [self._to_payment(row) for row in await conn.execute(stmt)]
+
     async def total_paid(self, invoice_id: str) -> int:
         stmt = select(func.coalesce(func.sum(payments.c.amount_ngn), 0)).where(
             payments.c.invoice_id == invoice_id
