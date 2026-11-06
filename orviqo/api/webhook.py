@@ -18,6 +18,7 @@ import logging
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, nullcontext
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -198,10 +199,11 @@ def create_app() -> FastAPI:
         for msg in messages:
             if await processed.seen(msg.id):
                 continue  # redelivered webhook — already handled
-            if businesses is not None and msg.sender_name:
-                # Their WhatsApp name: how their reminders introduce them until they
-                # set a business name of their own.
-                await businesses.note_whatsapp_name(msg.sender, msg.sender_name)
+            if businesses is not None:
+                # When they last wrote (a digest within 24h can be plain, free text),
+                # and their WhatsApp name: how their reminders introduce them until
+                # they set a business name of their own.
+                await businesses.note_message(msg.sender, datetime.now(UTC), msg.sender_name)
             # "LINK ABCD-2345" from the hosted MCP sign-in page: the sender's number
             # proves which ledger is theirs. No intake, so no LLM call.
             link_reply = await oauth.link_from_message(msg.sender, msg.text) if oauth else None

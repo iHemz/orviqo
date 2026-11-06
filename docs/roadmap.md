@@ -16,7 +16,8 @@ running balance → two-way replies**, multi-tenant by the owner's WhatsApp numb
 - **Running balances** — partial payments show cumulative progress ("₦50,000 of
   ₦80,000 paid, ₦30,000 still outstanding"); debtor queries show it too.
 - **Owner reminders** — daily digest of overdue debts (Vercel Cron →
-  `/cron/collections`; a worker process on a container host).
+  `/cron/collections`; a worker process on a container host). Free text inside
+  WhatsApp's 24h window, an approved template outside it.
 - **Debtor-chasing** — owner-attested consent: save a debtor's number
   (`contact` intent), chase overdue debts via an approved template, honor STOP.
 - **Owner-notification** — a debtor's answer to a reminder ("I'll pay Friday") is
@@ -61,9 +62,6 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 - [ ] **Messaging limits & verification.** The WhatsApp number starts at a low
       tier (a few hundred unique users/day). Scaling needs Meta Business
       Verification and climbing the messaging tiers via good quality ratings.
-- [ ] **Owner reminder template.** Owner digests are free text, so they only land
-      if the owner messaged within 24h. For reliable delivery they need their own
-      approved template (same constraint the chase already handles).
 - [ ] **Account/number strategy.** One shared Orviqo business number for all
       owners (current model, tenant = sender phone) vs. per-owner numbers. Shared
       is right for now; revisit at scale.

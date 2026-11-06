@@ -99,10 +99,25 @@ Then subscribe to the **messages** webhook field.
 
 WhatsApp forbids free-form business→user messages outside a 24-hour window of
 the user's last message. A scheduled reminder is almost always outside that
-window, so it must go out as a **Meta-approved message template**. Until you
-register one, the daily owner digest only lands for owners who messaged in the
-last 24h. Template messages sent outside that window are also what WhatsApp
-charges for, so this is the first part of Orviqo that isn't free.
+window, so it must go out as a **Meta-approved message template**. Template
+messages sent outside that window are also what WhatsApp charges for, so this is
+the first part of Orviqo that isn't free.
+
+### The owner digest
+
+An owner who messaged Orviqo in the last 24 hours (the webhook notes when) gets
+the full digest as plain text, which is free. Anyone else gets this template,
+registered as **Utility** (body, language English (US)):
+
+```
+Hi {{1}}, you have {{2}} overdue debts totalling {{3}}. The oldest is {{4}}. Reply to this message to see the full list.
+```
+
+Sample values for the review: `Ada`, `2`, `₦330,000`, `Randi, ₦250,000, 3 days
+overdue`. Then set `WHATSAPP_DIGEST_TEMPLATE` to its name. Until it's set, owners
+outside the window are skipped, and tried again on the next run (see
+`digest_template_params` in `reminder_service.py`). Their reply opens the
+window, so "who owes me?" gets them the whole list.
 
 ### Chasing debtors directly
 

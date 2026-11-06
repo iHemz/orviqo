@@ -110,13 +110,15 @@ debtors = Table(
 
 
 # Who a business is to its debtors: the owner's chosen name, and their WhatsApp
-# profile name as the fallback (see orviqo/domain/business.py).
+# profile name as the fallback (see orviqo/domain/business.py). last_message_at
+# says whether a digest can go as free text or needs a template.
 businesses = Table(
     "businesses",
     metadata,
     Column("business_id", String, primary_key=True),
     Column("name", String, nullable=True),
     Column("whatsapp_name", String, nullable=True),
+    Column("last_message_at", DateTime(timezone=True), nullable=True),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
