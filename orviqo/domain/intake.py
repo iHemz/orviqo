@@ -53,6 +53,8 @@ class IntakeAction(BaseModel):
         "reminder_reply",
         "my_debts",
         "business_name",
+        "promise",
+        "resume",
     ]
     invoice_id: str | None = Field(
         default=None, description="Which open invoice to update/settle (update, payment)."
@@ -75,6 +77,17 @@ class IntakeAction(BaseModel):
     reminder_id: str | None = Field(
         default=None,
         description="Which received reminder a 'reminder_reply' answers (its #id).",
+    )
+    reply_type: Literal["promise", "dispute", "other"] | None = Field(
+        default=None,
+        description=(
+            "For 'reminder_reply': a promise to pay by a date, a dispute of the debt, "
+            "or anything else."
+        ),
+    )
+    promise_date: date | None = Field(
+        default=None,
+        description="The date payment is promised for ('promise', or a 'promise' reply).",
     )
     clarify: str | None = Field(
         default=None, description="The question to ask (only for kind='clarify')."

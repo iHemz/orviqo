@@ -81,13 +81,17 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
       MCP), else their WhatsApp profile name, else the number alone.
 - [x] **"Who do I owe?"** is its own question, answered from the reminders the
       sender received, never from their ledger (which is money owed *to* them).
-- [ ] **Richer debtor conversations.** Beyond STOP/ack: let a debtor's "I'll pay
-      Friday" record a promise-to-pay the owner can see and that softens chasing.
+- [x] **Promises to pay.** A debtor's "I'll pay Friday" (or the owner's "Chidi says
+      he'll pay on the 15th") holds reminders about that debt through the date,
+      then chasing resumes on its own if it's still unpaid. The owner is told, and
+      "who owes me?" shows "promised by 13 Nov".
 - [ ] **Payment-history query.** "How much has Chidi paid overall?" as its own
       answer (the data is in the `payments` ledger; needs intent routing so it's
       not confused with "what does Chidi owe?").
-- [ ] **Dispute handling.** `InvoiceStatus.disputed` exists but nothing sets it;
-      wire a "Chidi says he already paid" path.
+- [x] **Disputes.** A debtor's "I don't owe that" pauses reminders about the debt
+      and tells the owner, who says "keep chasing Chidi" once it's sorted. The debt
+      stays open in the owner's ledger, marked disputed (a hold, not
+      `InvoiceStatus.disputed`, so it can still be paid or corrected).
 
 - [x] **Hosted MCP (v2).** Streamable HTTP + OAuth at `/mcp`, so owners connect
       from claude.ai or ChatGPT without running anything. Owners sign in by sending

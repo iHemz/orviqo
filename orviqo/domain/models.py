@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -59,6 +60,32 @@ class Payment(BaseModel):
     business_id: str
     amount_ngn: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class Hold(BaseModel):
+    """A pause on chasing one invoice: the debtor promised a date, or disputes it.
+
+    A promise holds reminders through its date, then they resume on their own if
+    the debt is still open. A dispute holds them until the owner says to carry on:
+    nagging someone about a debt they say they don't owe helps nobody.
+    """
+
+    invoice_id: str
+    reason: Literal["promise", "dispute"]
+    until: date | None = None  # a promise's date; None for a dispute
+    note: str = ""  # what was said, in their words
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def active(self, today: date) -> bool:
+        if self.reason == "dispute":
+            return True
+        return self.until is not None and today <= self.until
+
+    def describe(self) -> str:
+        """How it reads next to the debt in the owner's lists."""
+        if self.reason == "dispute":
+            return "disputed, reminders paused"
+        return f"promised by {self.until:%d %b}" if self.until else "promised"
 
 
 class Debtor(BaseModel):

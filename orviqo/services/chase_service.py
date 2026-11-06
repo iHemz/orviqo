@@ -2,7 +2,8 @@
 
 Where ``ReminderService`` nudges the owner, this messages the person who owes.
 For each overdue invoice it finds the debtor's saved contact and — unless they've
-opted out or were chased recently — sends them the approved WhatsApp template.
+opted out, were chased recently, or the invoice is on hold (a promised date that
+hasn't passed, a dispute) — sends them the approved WhatsApp template.
 Everything is behind ports, so it is fully unit-testable without WhatsApp or a DB.
 
 Chasing is gated on a Meta-approved template (proactive sends outside the 24h
@@ -69,9 +70,14 @@ class ChaseService:
             return 0  # chasing is off until a template is configured
 
         sent = 0
-        for invoice in await self._ledger.overdue(now.date()):
+        overdue = await self._ledger.overdue(now.date())
+        holds = await self._chases.holds([i.id for i in overdue])
+        for invoice in overdue:
             if is_demo(invoice.business_id):
                 continue  # a demo must never message a real phone
+            hold = holds.get(invoice.id)
+            if hold is not None and hold.active(now.date()):
+                continue  # they promised a date that hasn't passed, or dispute it
             debtor = await self._debtors.find(invoice.business_id, invoice.debtor_name)
             if debtor is None or debtor.opted_out:
                 continue  # no contact, or they said STOP

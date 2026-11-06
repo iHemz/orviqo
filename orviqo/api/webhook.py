@@ -74,6 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     audit = SqlAlchemyAuditLog(engine)
     payments = SqlAlchemyPaymentStore(engine)
     businesses = SqlAlchemyBusinessStore(engine)
+    chases = SqlAlchemyChaseStore(engine)
     app.state.businesses = businesses
     app.state.service = IntakeService(
         agent=agent,
@@ -83,6 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         debtors=debtor_store,
         confidence_threshold=settings.intake_confidence_threshold,
         businesses=businesses,
+        chases=chases,
     )
     # The web demo runs the same intake, except a debtor number typed into it is
     # held in memory only: never stored, so never chased or routed as a real debtor.
@@ -103,7 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         debtor_store,
         whatsapp,
         ledger=ledger,
-        chases=SqlAlchemyChaseStore(engine),
+        chases=chases,
         businesses=businesses,
     )
     app.state.processed = SqlAlchemyProcessedMessageStore(engine)
