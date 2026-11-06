@@ -81,7 +81,7 @@ skip Orviqo's agent and go straight to execution.
   `handle_message` calls it exactly as before. No behaviour change for WhatsApp or the
   demo, and the existing tests must pass untouched.
 - `source` is the text stored as the audit entry's `message`. For MCP calls, record a
-  readable trace such as `mcp:record_debt debtor=Chidi amount=150000 due=2026-11-07`.
+  readable trace such as `mcp:record_debt debtor=Chidi amount=150000 due=2026-11-06`.
 - Tool calls build an `IntakeAction` with `confidence=1.0`. The caller supplied explicit
   fields, so the confidence floor is not the safeguard here. The required-field checks
   and the ambiguity handling in `apply` are.
@@ -177,7 +177,7 @@ text is data. The same conventions are the `amount_conventions` prompt.
 
 Each debt in a result is an `InvoiceView`: `id`, `debtor_name`, `item`, `due_date`,
 `status`, `amount_outstanding_ngn`, `amount_paid_ngn`. Audit entries for tool calls
-cite a trace such as `mcp:record_debt debtor="Chidi" amount=150000 due=2026-11-07`.
+cite a trace such as `mcp:record_debt debtor="Chidi" amount=150000 due=2026-11-06`.
 `save_debtor_contact`'s trace leaves out the phone number.
 
 ## Contract tests (offline, in CI)
@@ -356,8 +356,8 @@ instance, every grant and token is in Postgres, so any serverless instance can
 serve any request. Requests must name the public host (DNS-rebinding protection).
 
 **Known limits.**
-- Real sign-in needs the WhatsApp number to receive messages from the owner, so
-  until it is public only allowlisted phones can link; everyone else can use a demo.
+- Real sign-in needs the owner to message the Orviqo WhatsApp number (public since
+  2026-11-06); anyone without WhatsApp can still use a demo.
 - Like any device-code style flow, a link code can be phished: someone who starts a
   sign-in and talks an owner into sending *their* code would get that owner's
   ledger. The page and the WhatsApp confirmation name the connecting app, and codes
