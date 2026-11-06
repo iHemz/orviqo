@@ -29,6 +29,10 @@ class LedgerStore(Protocol):
         """Open invoices past due. Every business (the worker), or just ``business_id``."""
         ...
 
+    async def for_debtor(self, business_id: str, debtor_name: str) -> list[Invoice]:
+        """Every invoice for this debtor, settled ones included (name matched case-blind)."""
+        ...
+
 
 class InMemoryLedger:
     """Non-durable ledger for local development, the CLI demo, and tests."""
@@ -54,6 +58,14 @@ class InMemoryLedger:
             inv
             for inv in self._invoices.values()
             if inv.business_id == business_id and inv.status is InvoiceStatus.open
+        ]
+
+    async def for_debtor(self, business_id: str, debtor_name: str) -> list[Invoice]:
+        name = debtor_name.casefold()
+        return [
+            inv
+            for inv in self._invoices.values()
+            if inv.business_id == business_id and inv.debtor_name.casefold() == name
         ]
 
     async def overdue(self, as_of: date, business_id: str | None = None) -> list[Invoice]:

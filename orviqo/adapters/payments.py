@@ -12,6 +12,10 @@ class PaymentStore(Protocol):
 
     async def for_invoice(self, invoice_id: str) -> list[Payment]: ...
 
+    async def for_invoices(self, invoice_ids: list[str]) -> list[Payment]:
+        """Every payment against these invoices, oldest first, in one lookup."""
+        ...
+
     async def total_paid(self, invoice_id: str) -> int: ...
 
     async def totals_paid(self, invoice_ids: list[str]) -> dict[str, int]:
@@ -30,6 +34,10 @@ class InMemoryPaymentStore:
 
     async def for_invoice(self, invoice_id: str) -> list[Payment]:
         return [p for p in self._payments if p.invoice_id == invoice_id]
+
+    async def for_invoices(self, invoice_ids: list[str]) -> list[Payment]:
+        wanted = set(invoice_ids)
+        return [p for p in self._payments if p.invoice_id in wanted]
 
     async def total_paid(self, invoice_id: str) -> int:
         return sum(p.amount_ngn for p in self._payments if p.invoice_id == invoice_id)

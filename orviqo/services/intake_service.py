@@ -232,6 +232,8 @@ class IntakeService:
             return await self._record(business_id, source, Decision.answered, action, reply)
         if action.kind == "query":
             return await self._answer(business_id, source, action, open_invoices)
+        if action.kind == "history":
+            return await self._payment_history(business_id, source, action)
         if action.kind == "payment":
             return await self._apply_payment(business_id, source, action, open_invoices)
         if action.kind == "contact":
@@ -425,6 +427,34 @@ class IntakeService:
             holds = await self._chases.holds([i.id for i in open_invoices])
             answer = _answer_query(open_invoices, holds)
         return await self._record(business_id, text, Decision.answered, action, Reply(text=answer))
+
+    async def _payment_history(self, business_id: str, text: str, action: IntakeAction) -> Reply:
+        """What a debtor has paid, payment by payment, across all their debts."""
+        if not action.debtor_name:
+            reply = Reply(text=action.clarify or "Whose payments should I show?")
+            return await self._record(business_id, text, Decision.asked, action, reply)
+        reply = Reply(text=await self._history_text(business_id, action.debtor_name))
+        return await self._record(business_id, text, Decision.answered, action, reply)
+
+    async def _history_text(self, business_id: str, debtor_name: str) -> str:
+        invoices = await self._ledger.for_debtor(business_id, debtor_name)
+        if not invoices:
+            return f"You have no debts recorded for {debtor_name}."
+        who = invoices[0].debtor_name  # as the owner first wrote it
+        by_id = {i.id: i for i in invoices}
+        paid = await self._payments.for_invoices(list(by_id))
+        owed = sum(i.amount_ngn or 0 for i in invoices if i.status is InvoiceStatus.open)
+        still = f"Still owed: ₦{owed:,}." if owed else "Nothing is owed now."
+        if not paid:
+            return f"No payments recorded from {who} yet. {still}"
+        lines = []
+        for p in sorted(paid, key=lambda p: p.created_at):
+            inv = by_id[p.invoice_id]
+            settled = " (settled)" if inv.status is InvoiceStatus.paid else ""
+            item = inv.item or "unspecified"
+            lines.append(f"- {p.created_at:%d %b}: ₦{p.amount_ngn:,} for {item}{settled}")
+        total = sum(p.amount_ngn for p in paid)
+        return f"{who} has paid ₦{total:,} in total:\n" + "\n".join(lines) + f"\n{still}"
 
     async def _answer_for_debtor(self, open_invoices: list[Invoice], debtor_name: str) -> str:
         matches = [i for i in open_invoices if i.debtor_name.lower() == debtor_name.lower()]

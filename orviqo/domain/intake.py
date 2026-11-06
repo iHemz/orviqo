@@ -55,6 +55,7 @@ class IntakeAction(BaseModel):
         "business_name",
         "promise",
         "resume",
+        "history",
     ]
     invoice_id: str | None = Field(
         default=None, description="Which open invoice to update/settle (update, payment)."

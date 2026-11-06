@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select
 from sqlalchemy import update as sa_update
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -66,6 +66,18 @@ class SqlAlchemyLedger:
         async with self._engine.connect() as conn:
             result = await conn.execute(stmt)
             return [self._to_invoice(row) for row in result]
+
+    async def for_debtor(self, business_id: str, debtor_name: str) -> list[Invoice]:
+        stmt = (
+            select(invoices)
+            .where(
+                invoices.c.business_id == business_id,
+                func.lower(invoices.c.debtor_name) == debtor_name.lower(),
+            )
+            .order_by(invoices.c.created_at)
+        )
+        async with self._engine.connect() as conn:
+            return [self._to_invoice(row) for row in await conn.execute(stmt)]
 
     async def overdue(self, as_of: date, business_id: str | None = None) -> list[Invoice]:
         stmt = select(invoices).where(
