@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from orviqo.adapters.audit import AuditLog
-from orviqo.domain.demo import DEMO_PREFIX
+from orviqo.domain.demo import DEMO_PREFIX, MCP_DEMO_PREFIX
 from orviqo.services.intake_service import IntakeService
 
 MAX_MESSAGE_CHARS = 500
@@ -46,7 +46,11 @@ class DemoService:
         if len(await self._audit.recent(business_id, self._session_limit)) >= self._session_limit:
             return [SESSION_LIMIT_REPLY]
         since = datetime.now(UTC) - timedelta(days=1)
-        if await self._audit.count_since(DEMO_PREFIX, since) >= self._daily_limit:
+        # Hosted-MCP sandboxes share the "demo:" prefix but make no LLM calls: they
+        # don't count against the web demo's quota guard.
+        web = await self._audit.count_since(DEMO_PREFIX, since)
+        web -= await self._audit.count_since(MCP_DEMO_PREFIX, since)
+        if web >= self._daily_limit:
             return [DAILY_LIMIT_REPLY]
 
         reply = await self._intake.handle_message(business_id, text[:MAX_MESSAGE_CHARS])

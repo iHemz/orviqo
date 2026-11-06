@@ -43,6 +43,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `CRON_SECRET` | the random string |
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` | optional, see step 4 |
 | `WHATSAPP_DISPLAY_NUMBER` | optional, turns on `/start` and the "Chat on WhatsApp" button |
+| `ORVIQO_PUBLIC_URL` | optional, the app's public URL (e.g. `https://orviqo.example`): turns on hosted MCP, see step 7 |
 
 4. **Deploy.** The build installs dependencies from `uv.lock`, then runs
    `alembic upgrade head` (the `[tool.vercel.scripts] build` step) against
@@ -150,13 +151,35 @@ socials:
 uv run --with segno python tools/entry_qr.py --url https://<project>.vercel.app/start
 ```
 
+## 7. Hosted MCP (claude.ai, ChatGPT)
+
+Set `ORVIQO_PUBLIC_URL` to the URL people reach the app on, exactly (scheme and
+host, no trailing slash), and redeploy. The app then also serves the MCP server
+at `/mcp`, with OAuth at the root (`/.well-known/*`, `/register`, `/authorize`,
+`/token`, `/revoke`) and the sign-in pages under `/mcp/login/`. The migration
+for its tables runs in the build like every other.
+
+Requests to `/mcp` must arrive on that host (DNS-rebinding protection), so
+connect clients to the custom domain if you set one, not the `*.vercel.app` URL.
+
+Owners sign in by sending the code on the sign-in page to the Orviqo WhatsApp
+number, so real sign-in needs the webhook receiving messages (it doesn't need a
+working send token: the confirmation reply is best-effort). Anyone can take a
+demo ledger instead; `MCP_DEMO_DAILY_LIMIT` (default 3000 audit entries a day
+across all demo ledgers) guards the free database, and the daily collections run
+deletes demo ledgers 3 days after they were made, with expired sign-ins and tokens.
+
+To connect: in claude.ai, **Settings → Connectors → Add custom connector**, URL
+`https://<your domain>/mcp`. ChatGPT: **Settings → Connectors → Create** (developer
+mode), same URL.
+
 ## The web demo's limits
 
 The landing page demo runs the real agent against the real database, as a
 private `demo:<session>` business per page load. Debtor numbers typed into it
 are never stored, and the collections run skips demo businesses, so the demo
 can't message anyone. Two caps protect the free Gemini quota, both counted from
-the audit log: `DEMO_SESSION_LIMIT` messages per session (default 30) and
+the audit log (hosted-MCP demo ledgers make no LLM calls and don't count): `DEMO_SESSION_LIMIT` messages per session (default 30) and
 `DEMO_DAILY_LIMIT` across all sessions per day (default 300).
 
 ## Alternative: a container host (Fly.io)

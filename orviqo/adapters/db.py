@@ -19,6 +19,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    Text,
     func,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -103,6 +104,50 @@ debtors = Table(
     Column("phone", String, nullable=False),
     Column("opted_out", Boolean, nullable=False, default=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+
+# Hosted MCP OAuth (see orviqo/mcp/oauth.py). Clients register themselves (RFC 7591).
+oauth_clients = Table(
+    "oauth_clients",
+    metadata,
+    Column("client_id", String, primary_key=True),
+    Column("info", Text, nullable=False),  # OAuthClientInformationFull as JSON
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+# A client's connect request, waiting for the owner to sign in (minutes-lived).
+oauth_grants = Table(
+    "oauth_grants",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("link_code", String, nullable=False, index=True),
+    Column("client_id", String, nullable=False),
+    Column("client_name", String, nullable=True),
+    Column("redirect_uri", Text, nullable=False),
+    Column("redirect_uri_provided_explicitly", Boolean, nullable=False),
+    Column("state", Text, nullable=True),
+    Column("code_challenge", String, nullable=False),
+    Column("scopes", String, nullable=False),  # space-separated
+    Column("resource", Text, nullable=True),
+    Column("business_id", String, nullable=True),  # set when the owner links
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+)
+
+# Authorization codes, access and refresh tokens: only their SHA-256 hashes are kept.
+oauth_tokens = Table(
+    "oauth_tokens",
+    metadata,
+    Column("token_hash", String, primary_key=True),
+    Column("kind", String, nullable=False),  # "code" | "access" | "refresh"
+    Column("client_id", String, nullable=False),
+    Column("business_id", String, nullable=False, index=True),
+    Column("scopes", String, nullable=False),
+    Column("resource", Text, nullable=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("code_challenge", String, nullable=True),
+    Column("redirect_uri", Text, nullable=True),
+    Column("redirect_uri_provided_explicitly", Boolean, nullable=False, default=False),
 )
 
 

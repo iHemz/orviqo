@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from mcp.server.auth.middleware.auth_context import get_access_token
+
 from orviqo.config import ConfigError
 from orviqo.domain.demo import is_demo
 from orviqo.domain.phone import normalize_phone
@@ -49,3 +51,18 @@ def require_business_id(raw: str) -> str:
     if not business_id:
         raise ConfigError(f"ORVIQO_MCP_BUSINESS_ID {raw!r} is not a phone number.")
     return business_id
+
+
+class TokenTenant:
+    """The business named by the request's verified access token: the HTTP transport's model.
+
+    The SDK's bearer middleware has already checked the token (signature-free: it is
+    a stored secret, looked up by hash) before any tool runs; its ``subject`` is the
+    business the owner proved on WhatsApp, or their demo sandbox.
+    """
+
+    def business_id(self) -> str:
+        token = get_access_token()
+        if token is None or not token.subject:
+            raise PermissionError("This request carries no Orviqo sign-in.")
+        return token.subject

@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     # number, the same id the webhook files their messages under. Empty = it won't start.
     orviqo_mcp_business_id: str = ""
 
+    # Hosted MCP (Streamable HTTP + OAuth) for claude.ai, ChatGPT and other web clients:
+    # this app's public base URL, e.g. https://orviqo.example. Empty = not served.
+    orviqo_public_url: str = ""
+    # Audit entries per day across all hosted-MCP demo sandboxes (a free-database guard).
+    mcp_demo_daily_limit: int = 3000
+
     @field_validator("database_url")
     @classmethod
     def _async_database_url(cls, url: str) -> str:

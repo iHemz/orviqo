@@ -141,11 +141,16 @@ def _status(reply: Reply) -> WriteStatus:
 
 
 def build_server(
-    stores: Stores, tenant: TenantResolver, *, today: Callable[[], date] = lagos_today
+    stores: Stores,
+    tenant: TenantResolver,
+    *,
+    today: Callable[[], date] = lagos_today,
+    **options: Any,
 ) -> MCPServer:
     """The MCP server over ``stores``, acting for whichever business ``tenant`` names.
 
-    ``today`` returns the current Lagos date; tests and evals pin it.
+    ``today`` returns the current Lagos date; tests and evals pin it. ``options`` go
+    to ``MCPServer`` (the hosted server passes its OAuth provider and settings).
     """
     intake = stores.intake()
     server = MCPServer(
@@ -153,6 +158,7 @@ def build_server(
         title="Orviqo receivables ledger",
         instructions=INSTRUCTIONS,
         version="0.1.0",
+        **options,
     )
 
     async def views(invoices: list[Invoice]) -> list[InvoiceView]:

@@ -17,10 +17,12 @@ import json
 import logging
 import secrets
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 
 from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
+from mcp.server.mcpserver import MCPServer
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from orviqo import worker
 from orviqo.adapters.db import make_engine
@@ -29,6 +31,7 @@ from orviqo.adapters.processed import ProcessedMessageStore
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
+from orviqo.adapters.sql_oauth import SqlAlchemyOAuthStore
 from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
 from orviqo.adapters.sql_processed import SqlAlchemyProcessedMessageStore
 from orviqo.adapters.whatsapp import (
@@ -42,6 +45,9 @@ from orviqo.agents.intake import PydanticAIIntakeAgent
 from orviqo.api.site import router as site_router
 from orviqo.config import bootstrap, settings
 from orviqo.domain.entry import whatsapp_link
+from orviqo.mcp.hosted import build_hosted_server, hosted_app
+from orviqo.mcp.oauth import OrviqoOAuthProvider
+from orviqo.mcp.server import Stores
 from orviqo.services.debtor_inbox import DebtorInboxService
 from orviqo.services.demo_service import DemoService
 from orviqo.services.intake_service import IntakeService
@@ -55,7 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Our INFO lines (e.g. which model answered) belong in the platform's logs too.
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("orviqo").setLevel(logging.INFO)
-    engine = make_engine(settings.database_url)
+    engine = app.state.engine
     # Schema is managed by Alembic — run `uv run alembic upgrade head` before starting.
     debtor_store = SqlAlchemyDebtorStore(engine)
     whatsapp = make_whatsapp_client(settings)
@@ -89,8 +95,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.inbox = DebtorInboxService(debtor_store, whatsapp)
     app.state.processed = SqlAlchemyProcessedMessageStore(engine)
     app.state.whatsapp = whatsapp
+    mcp = app.state.mcp
     try:
-        yield
+        # A mounted app's lifespan never runs, so the hosted MCP server's runs here.
+        async with mcp.session_manager.run() if mcp else nullcontext():
+            yield
     finally:
         await whatsapp.aclose()
         await engine.dispose()
@@ -99,6 +108,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="Orviqo — receivables agent", lifespan=lifespan)
     app.include_router(site_router)
+    # Lazy: nothing connects until the first query, so building it here is free.
+    app.state.engine = make_engine(settings.database_url)
+    app.state.mcp, app.state.oauth = None, None
+    if settings.orviqo_public_url:
+        app.state.mcp, app.state.oauth = _hosted_mcp(app.state.engine)
 
     @app.get("/health")
     def health() -> dict:
@@ -159,13 +173,25 @@ def create_app() -> FastAPI:
             # Real credentials but no way to verify callers: refuse, never fail open.
             log.error("WHATSAPP_APP_SECRET is not set; refusing unverified webhook")
             return Response("Webhook verification is not configured.", status_code=503)
+        oauth: OrviqoOAuthProvider | None = request.app.state.oauth
         payload = json.loads(body)
         for msg in iter_text_messages(payload):
             if await processed.seen(msg.id):
                 continue  # redelivered webhook — already handled
+            # "LINK ABCD-2345" from the hosted MCP sign-in page: the sender's number
+            # proves which ledger is theirs. No intake, so no LLM call.
+            link_reply = await oauth.link_from_message(msg.sender, msg.text) if oauth else None
             # A known debtor's reply (e.g. STOP) is handled here, not as owner intake.
-            debtor_reply = await inbox.handle_if_debtor(msg.sender, msg.text)
-            if debtor_reply is not None:
+            debtor_reply = None
+            if link_reply is None:
+                debtor_reply = await inbox.handle_if_debtor(msg.sender, msg.text)
+            if link_reply is not None:
+                # Already linked: a failed confirmation mustn't make WhatsApp redeliver.
+                try:
+                    await whatsapp.send_text(msg.sender, link_reply)
+                except Exception:
+                    log.exception("couldn't send the link confirmation")
+            elif debtor_reply is not None:
                 await whatsapp.send_text(msg.sender, debtor_reply)
             else:
                 reply = await service.handle_message(msg.sender, msg.text)
@@ -177,7 +203,27 @@ def create_app() -> FastAPI:
             await processed.mark(msg.id)
         return JSONResponse({"status": "ok"})
 
+    if app.state.mcp is not None:
+        # Last, at the root: OAuth endpoints (/.well-known/*, /authorize, /token,
+        # /register, /revoke), /mcp and the sign-in pages. Routes above win first.
+        app.mount("/", hosted_app(app.state.mcp, settings.orviqo_public_url))
     return app
+
+
+def _hosted_mcp(engine: AsyncEngine) -> tuple[MCPServer, OrviqoOAuthProvider]:
+    stores = Stores(
+        ledger=SqlAlchemyLedger(engine),
+        payments=SqlAlchemyPaymentStore(engine),
+        debtors=SqlAlchemyDebtorStore(engine),
+        audit=SqlAlchemyAuditLog(engine),
+    )
+    return build_hosted_server(
+        stores,
+        SqlAlchemyOAuthStore(engine),
+        public_url=settings.orviqo_public_url,
+        display_number=settings.whatsapp_display_number,
+        demo_daily_limit=settings.mcp_demo_daily_limit,
+    )
 
 
 app = create_app()
