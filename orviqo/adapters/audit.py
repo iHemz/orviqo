@@ -13,7 +13,11 @@ class AuditLog(Protocol):
 
     async def entries(self, business_id: str) -> list[AuditEntry]: ...
 
-    async def recent(self, business_id: str, limit: int) -> list[AuditEntry]: ...
+    async def recent(
+        self, business_id: str, limit: int, invoice_id: str | None = None
+    ) -> list[AuditEntry]:
+        """The last ``limit`` entries, oldest first; only ``invoice_id``'s when given."""
+        ...
 
     async def count_since(self, business_prefix: str, since: datetime) -> int:
         """Entries since ``since`` across every business whose id starts with the prefix."""
@@ -30,8 +34,15 @@ class InMemoryAuditLog:
     async def entries(self, business_id: str) -> list[AuditEntry]:
         return [e for e in self._entries if e.business_id == business_id]
 
-    async def recent(self, business_id: str, limit: int) -> list[AuditEntry]:
-        return [e for e in self._entries if e.business_id == business_id][-limit:]
+    async def recent(
+        self, business_id: str, limit: int, invoice_id: str | None = None
+    ) -> list[AuditEntry]:
+        matches = [
+            e
+            for e in self._entries
+            if e.business_id == business_id and (invoice_id is None or e.invoice_id == invoice_id)
+        ]
+        return matches[-limit:]
 
     async def count_since(self, business_prefix: str, since: datetime) -> int:
         return sum(

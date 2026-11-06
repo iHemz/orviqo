@@ -26,6 +26,13 @@ running balance → two-way replies**, multi-tenant by the owner's WhatsApp numb
   included) can try it without WhatsApp. Demo debtor numbers are never stored and
   the collections run skips demo businesses; per-session and daily caps protect
   the free LLM quota.
+- **MCP server** (`orviqo-mcp`). The ledger as tools for Claude and any MCP
+  client: owners can ask "who owes me?" or say "Chidi paid 20k" from their own
+  assistant. Writes go through the same rigor gate and audit log as WhatsApp (an
+  ambiguous payment comes back with candidates, nothing written), and tools are
+  tenant-scoped per call so a hosted version can share them. Model evals
+  (`make eval`, free Gemini tier) report a 0 invented-amount rate. See
+  [mcp.md](mcp.md).
 - **Free hosting** — moved off paid Fly + Anthropic to Vercel Hobby, Neon and
   Gemini's free tier; the LLM provider is one env var (see
   [deploy.md](deploy.md)).
@@ -72,6 +79,11 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
       not confused with "what does Chidi owe?").
 - [ ] **Dispute handling.** `InvoiceStatus.disputed` exists but nothing sets it;
       wire a "Chidi says he already paid" path.
+
+- [ ] **Hosted MCP (v2).** Streamable HTTP with per-owner OAuth, so owners can
+      connect from claude.ai or ChatGPT without running anything locally. The
+      tools already resolve their business per call (`TenantResolver`); this needs
+      a token-to-business resolver, auth, and a deployment.
 
 ## Reliability / ops backlog
 

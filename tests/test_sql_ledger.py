@@ -100,3 +100,16 @@ async def test_overdue_returns_only_past_due_open_invoices(ledger: SqlAlchemyLed
     result = await ledger.overdue(date(2026, 7, 20))
 
     assert [i.debtor_name for i in result] == ["Late"]
+
+
+async def test_overdue_for_one_business_filters_in_sql(ledger: SqlAlchemyLedger) -> None:
+    due = date(2026, 7, 1)
+    mine = await ledger.add(
+        ParsedInvoice(debtor_name="Chidi", amount_ngn=1, due_date=due, confidence=1.0), "biz1"
+    )
+    await ledger.add(
+        ParsedInvoice(debtor_name="Chidi", amount_ngn=2, due_date=due, confidence=1.0), "biz2"
+    )
+
+    assert [i.id for i in await ledger.overdue(date(2026, 7, 20), "biz1")] == [mine.id]
+    assert len(await ledger.overdue(date(2026, 7, 20))) == 2  # the worker still sees all

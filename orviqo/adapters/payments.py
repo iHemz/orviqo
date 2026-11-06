@@ -14,6 +14,10 @@ class PaymentStore(Protocol):
 
     async def total_paid(self, invoice_id: str) -> int: ...
 
+    async def totals_paid(self, invoice_ids: list[str]) -> dict[str, int]:
+        """Total paid per invoice, in one lookup; invoices with no payments map to 0."""
+        ...
+
 
 class InMemoryPaymentStore:
     def __init__(self) -> None:
@@ -29,3 +33,10 @@ class InMemoryPaymentStore:
 
     async def total_paid(self, invoice_id: str) -> int:
         return sum(p.amount_ngn for p in self._payments if p.invoice_id == invoice_id)
+
+    async def totals_paid(self, invoice_ids: list[str]) -> dict[str, int]:
+        totals = dict.fromkeys(invoice_ids, 0)
+        for p in self._payments:
+            if p.invoice_id in totals:
+                totals[p.invoice_id] += p.amount_ngn
+        return totals

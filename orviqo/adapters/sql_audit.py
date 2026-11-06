@@ -32,21 +32,23 @@ class SqlAlchemyAuditLog:
 
     async def entries(self, business_id: str) -> list[AuditEntry]:
         stmt = (
-            select(audit_log)
-            .where(audit_log.c.business_id == business_id)
-            .order_by(audit_log.c.id)
+            select(audit_log).where(audit_log.c.business_id == business_id).order_by(audit_log.c.id)
         )
         async with self._engine.connect() as conn:
             result = await conn.execute(stmt)
             return [self._to_entry(row) for row in result]
 
-    async def recent(self, business_id: str, limit: int) -> list[AuditEntry]:
+    async def recent(
+        self, business_id: str, limit: int, invoice_id: str | None = None
+    ) -> list[AuditEntry]:
         stmt = (
             select(audit_log)
             .where(audit_log.c.business_id == business_id)
             .order_by(audit_log.c.id.desc())
             .limit(limit)
         )
+        if invoice_id is not None:
+            stmt = stmt.where(audit_log.c.invoice_id == invoice_id)
         async with self._engine.connect() as conn:
             rows = list(await conn.execute(stmt))
         return [self._to_entry(row) for row in reversed(rows)]

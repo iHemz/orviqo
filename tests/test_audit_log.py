@@ -118,3 +118,22 @@ async def test_counts_recent_entries_by_business_prefix(audit: SqlAlchemyAuditLo
         )
 
     assert await audit.count_since("demo:", now - timedelta(days=1)) == 2
+
+
+async def test_recent_can_narrow_to_one_invoice(audit: SqlAlchemyAuditLog) -> None:
+    for invoice_id in ("inv1", None, "inv1", "inv2"):
+        await audit.record(
+            AuditEntry(
+                business_id="biz1",
+                message=f"m-{invoice_id}",
+                decision=Decision.recorded,
+                confidence=1.0,
+                reason="r",
+                invoice_id=invoice_id,
+            )
+        )
+
+    entries = await audit.recent("biz1", 10, invoice_id="inv1")
+
+    assert [e.invoice_id for e in entries] == ["inv1", "inv1"]
+    assert await audit.recent("biz2", 10, invoice_id="inv1") == []

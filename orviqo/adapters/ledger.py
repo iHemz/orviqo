@@ -25,7 +25,9 @@ class LedgerStore(Protocol):
 
     async def open_invoices(self, business_id: str) -> list[Invoice]: ...
 
-    async def overdue(self, as_of: date) -> list[Invoice]: ...
+    async def overdue(self, as_of: date, business_id: str | None = None) -> list[Invoice]:
+        """Open invoices past due. Every business (the worker), or just ``business_id``."""
+        ...
 
 
 class InMemoryLedger:
@@ -54,11 +56,12 @@ class InMemoryLedger:
             if inv.business_id == business_id and inv.status is InvoiceStatus.open
         ]
 
-    async def overdue(self, as_of: date) -> list[Invoice]:
+    async def overdue(self, as_of: date, business_id: str | None = None) -> list[Invoice]:
         return [
             inv
             for inv in self._invoices.values()
             if inv.status is InvoiceStatus.open
+            and (business_id is None or inv.business_id == business_id)
             and inv.due_date is not None
             and inv.due_date < as_of
         ]
