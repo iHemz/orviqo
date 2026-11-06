@@ -48,11 +48,10 @@ class SqlAlchemyDebtorStore:
             row = (await conn.execute(self._match(business_id, name))).first()
         return self._to_debtor(row) if row is not None else None
 
-    async def find_by_phone(self, phone: str) -> Debtor | None:
+    async def find_all_by_phone(self, phone: str) -> list[Debtor]:
         stmt = select(debtors).where(debtors.c.phone == normalize_phone(phone))
         async with self._engine.connect() as conn:
-            row = (await conn.execute(stmt)).first()
-        return self._to_debtor(row) if row is not None else None
+            return [self._to_debtor(row) for row in await conn.execute(stmt)]
 
     async def opt_out(self, business_id: str, name: str) -> None:
         async with self._engine.begin() as conn:

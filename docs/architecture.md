@@ -106,8 +106,9 @@ Debtor-chasing ✅ — owner-attested consent: a `contact` intent saves a debtor
 number, `ChaseService` (the run's 2nd pass) messages debtors with overdue debts via
 an approved template, and inbound routing honors STOP (opt-out) before owner
 intake ever sees the message. Chasing is gated on `WHATSAPP_CHASE_TEMPLATE`;
-unset, the chase pass is a safe no-op. A debtor's reply is relayed to the owner
-(best-effort) so the chase is a two-way signal. Running balances ✅ — partial
+unset, the chase pass is a safe no-op. A debtor's reply within 72h of a chase is
+relayed to the owner who chased them (best-effort) so the chase is a two-way signal;
+a saved contact alone never captures a number, because a debtor may be an owner too. Running balances ✅ — partial
 payments show cumulative progress ("₦70,000 of ₦80,000 paid, ₦10,000 still
 outstanding"), reconstructing the original from the outstanding amount plus the
 payments ledger, no schema change. Inbound idempotency ✅ — redelivered webhooks

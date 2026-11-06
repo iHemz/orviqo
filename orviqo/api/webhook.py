@@ -29,6 +29,7 @@ from orviqo.adapters.db import make_engine
 from orviqo.adapters.debtors import InMemoryDebtorStore
 from orviqo.adapters.processed import ProcessedMessageStore
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
+from orviqo.adapters.sql_chases import SqlAlchemyChaseStore
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_oauth import SqlAlchemyOAuthStore
@@ -92,7 +93,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         session_limit=settings.demo_session_limit,
         daily_limit=settings.demo_daily_limit,
     )
-    app.state.inbox = DebtorInboxService(debtor_store, whatsapp)
+    app.state.inbox = DebtorInboxService(
+        debtor_store,
+        whatsapp,
+        ledger=ledger,
+        chases=SqlAlchemyChaseStore(engine),
+        audit=audit,
+    )
     app.state.processed = SqlAlchemyProcessedMessageStore(engine)
     app.state.whatsapp = whatsapp
     mcp = app.state.mcp

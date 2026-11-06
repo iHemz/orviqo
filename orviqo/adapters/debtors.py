@@ -23,7 +23,9 @@ class DebtorStore(Protocol):
 
     async def find(self, business_id: str, name: str) -> Debtor | None: ...
 
-    async def find_by_phone(self, phone: str) -> Debtor | None: ...
+    async def find_all_by_phone(self, phone: str) -> list[Debtor]:
+        """Every business's contact with this number: one person can owe several owners."""
+        ...
 
     async def opt_out(self, business_id: str, name: str) -> None: ...
 
@@ -49,9 +51,9 @@ class InMemoryDebtorStore:
     async def find(self, business_id: str, name: str) -> Debtor | None:
         return self._debtors.get((business_id, name.casefold()))
 
-    async def find_by_phone(self, phone: str) -> Debtor | None:
+    async def find_all_by_phone(self, phone: str) -> list[Debtor]:
         target = normalize_phone(phone)
-        return next((d for d in self._debtors.values() if d.phone == target), None)
+        return [d for d in self._debtors.values() if d.phone == target]
 
     async def opt_out(self, business_id: str, name: str) -> None:
         key = (business_id, name.casefold())

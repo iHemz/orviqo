@@ -36,13 +36,16 @@ async def test_upsert_refreshes_phone_without_duplicating(debtors: SqlAlchemyDeb
     assert found is not None and found.phone == "2348039999999"
 
 
-async def test_find_by_phone_matches_across_formats(debtors: SqlAlchemyDebtorStore) -> None:
+async def test_find_all_by_phone_matches_across_formats_and_businesses(
+    debtors: SqlAlchemyDebtorStore,
+) -> None:
     await debtors.upsert("biz1", "Chidi", "0803 123 4567")
+    await debtors.upsert("biz2", "Chidi O.", "+234 803 123 4567")  # owes a second owner
 
     # An inbound reply arrives as a bare wa_id; it must still resolve to the debtor.
-    found = await debtors.find_by_phone("2348031234567")
-    assert found is not None and found.name == "Chidi"
-    assert await debtors.find_by_phone("2340000000000") is None
+    found = await debtors.find_all_by_phone("2348031234567")
+    assert sorted(d.business_id for d in found) == ["biz1", "biz2"]
+    assert await debtors.find_all_by_phone("2340000000000") == []
 
 
 async def test_opt_out_sets_the_flag(debtors: SqlAlchemyDebtorStore) -> None:
