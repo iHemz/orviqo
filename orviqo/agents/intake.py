@@ -77,6 +77,11 @@ Choose exactly one `kind`:
 - "promise": the OWNER says one of their debtors will pay by a date ("Chidi says
   he'll pay Friday", "Ada promised to pay on the 15th"). Set `debtor_name`, the
   matching `invoice_id`, and `promise_date`. Not a payment: nothing was paid yet.
+- "plan": the owner agrees INSTALMENTS for an existing debt ("Chidi will pay 20k
+  every Friday", "Ada is paying 50k monthly from 1 December"). Set `debtor_name`,
+  the matching `invoice_id`, `amount_ngn` to EACH instalment (not the total),
+  `plan_every` ("week" or "month"), and `due_date` to the FIRST instalment's date
+  ("every Friday" starts next Friday). A single date with no repeat is "promise".
 - "resume": the owner wants reminders to a debtor started again after a promise
   or dispute ("keep chasing Chidi", "Chidi's dispute is sorted, remind him
   again"). Set `debtor_name` (and `invoice_id` if one debt is meant).

@@ -115,8 +115,13 @@ payments show cumulative progress ("₦70,000 of ₦80,000 paid, ₦10,000 still
 outstanding"), reconstructing the original from the outstanding amount plus the
 payments ledger, no schema change. Inbound idempotency ✅ — redelivered webhooks
 are deduped by message id (`processed_messages`), marked only after a clean
-handle, so a retried "Chidi paid 50k" is never double-counted. Next: payment
-plans (expected instalments) and richer debtor conversations.
+handle, so a retried "Chidi paid 50k" is never double-counted. Holds ✅ — a
+promised date or a dispute pauses chasing one invoice (`chase_holds`): a promise
+until its date passes, a dispute until the owner says to carry on. Instalments ✅
+— a payment plan (`payment_plans`) keeps the invoice's `due_date` on the next
+instalment, so a missed one is simply overdue and the existing chase and digest
+handle it; the chase asks for the instalment, and each payment moves the date on
+one period per full instalment.
 
 ## Migrations
 

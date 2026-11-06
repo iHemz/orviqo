@@ -30,15 +30,19 @@ from pydantic import Field
 
 from orviqo.adapters.audit import AuditLog
 from orviqo.adapters.businesses import BusinessStore, InMemoryBusinessStore
+from orviqo.adapters.chases import ChaseStore, InMemoryChaseStore
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.payments import PaymentStore
+from orviqo.adapters.plans import InMemoryPlanStore, PlanStore
 from orviqo.adapters.sql_audit import SqlAlchemyAuditLog
 from orviqo.adapters.sql_businesses import SqlAlchemyBusinessStore
+from orviqo.adapters.sql_chases import SqlAlchemyChaseStore
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
+from orviqo.adapters.sql_plans import SqlAlchemyPlanStore
 from orviqo.config import ConfigError, settings
 from orviqo.domain.audit import Decision
 from orviqo.domain.intake import IntakeAction, Reminder, Turn
@@ -122,6 +126,9 @@ class Stores:
     debtors: DebtorStore
     audit: AuditLog
     businesses: BusinessStore = field(default_factory=InMemoryBusinessStore)
+    # Holds and instalment plans: a payment recorded here moves a plan on too.
+    chases: ChaseStore = field(default_factory=InMemoryChaseStore)
+    plans: PlanStore = field(default_factory=InMemoryPlanStore)
 
     def intake(self) -> IntakeService:
         # confidence 1.0 on every tool action makes the threshold moot: the caller
@@ -133,6 +140,8 @@ class Stores:
             self.payments,
             self.debtors,
             businesses=self.businesses,
+            chases=self.chases,
+            plans=self.plans,
         )
 
 
@@ -441,6 +450,8 @@ async def _serve(business_id: str) -> None:
         debtors=SqlAlchemyDebtorStore(engine),
         audit=SqlAlchemyAuditLog(engine),
         businesses=SqlAlchemyBusinessStore(engine),
+        chases=SqlAlchemyChaseStore(engine),
+        plans=SqlAlchemyPlanStore(engine),
     )
     try:
         await build_server(stores, StaticTenant(business_id)).run_stdio_async()

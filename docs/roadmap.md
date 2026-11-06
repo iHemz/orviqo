@@ -68,9 +68,10 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 
 ## Next features (not gaps in the core loop — build on demand)
 
-- [ ] **Payment plans / instalments.** "Chidi will pay 20k every Friday" — track an
-      expected schedule per invoice; remind/chase per instalment due date. Needs a
-      new domain concept (instalment schedule) and touches reminder + chase timing.
+- [x] **Instalments.** "Chidi will pay 20k every Friday" sets a weekly or monthly
+      plan on the debt. Its due date is always the next instalment's, so a missed
+      instalment is chased (for the instalment, not the whole balance) like any
+      overdue debt; each payment moves it on one period per full instalment.
 - [x] **Swipe-replies to a chase.** Each chase stores its WhatsApp message id; a
       reply that quotes it (`context.id`) marks that reminder as answered for the
       intake agent, so "Paid 20k" sent as a reply goes to that creditor without a

@@ -19,6 +19,7 @@ from orviqo.adapters.businesses import BusinessStore, InMemoryBusinessStore
 from orviqo.adapters.chases import ChaseStore
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
+from orviqo.adapters.plans import InMemoryPlanStore, PlanStore
 from orviqo.adapters.whatsapp import WhatsAppClient
 from orviqo.domain.business import identify
 from orviqo.domain.demo import is_demo
@@ -27,17 +28,20 @@ from orviqo.domain.models import Debtor, Invoice
 _MIN_INTERVAL_HOURS = 20
 
 
-def _chase_params(invoice: Invoice, debtor: Debtor, creditor: str) -> list[str]:
+def _chase_params(
+    invoice: Invoice, debtor: Debtor, creditor: str, amount_ngn: int | None = None
+) -> list[str]:
     """The template body variables, in order: debtor, creditor, amount, item, due date.
 
     ``creditor`` names who is owed, with their number ("Ada Fabrics (+234…)"): a
     reminder that doesn't say who is asking is incomplete, and looks like a scam.
+    ``amount_ngn`` is the missed instalment, for a debt on a payment plan.
     """
     due = invoice.due_date.isoformat() if invoice.due_date else "recently"
     return [
         debtor.name,
         creditor,
-        f"₦{invoice.amount_ngn:,}",
+        f"₦{amount_ngn if amount_ngn is not None else invoice.amount_ngn:,}",
         invoice.item or "your order",
         due,
     ]
@@ -54,6 +58,7 @@ class ChaseService:
         template_lang: str = "en_US",
         min_interval_hours: float = _MIN_INTERVAL_HOURS,
         businesses: BusinessStore | None = None,
+        plans: PlanStore | None = None,
     ) -> None:
         self._ledger = ledger
         self._debtors = debtors
@@ -63,6 +68,7 @@ class ChaseService:
         self._template_lang = template_lang
         self._min_interval = timedelta(hours=min_interval_hours)
         self._businesses = businesses or InMemoryBusinessStore()
+        self._plans = plans or InMemoryPlanStore()
 
     async def run(self, now: datetime) -> int:
         """Chase each eligible overdue debt. Returns how many debtors were messaged."""
@@ -71,7 +77,8 @@ class ChaseService:
 
         sent = 0
         overdue = await self._ledger.overdue(now.date())
-        holds = await self._chases.holds([i.id for i in overdue])
+        ids = [i.id for i in overdue]
+        holds, plans = await self._chases.holds(ids), await self._plans.for_invoices(ids)
         for invoice in overdue:
             if is_demo(invoice.business_id):
                 continue  # a demo must never message a real phone
@@ -83,10 +90,13 @@ class ChaseService:
                 continue  # no contact, or they said STOP
             if await self._chased_recently(invoice.id, now):
                 continue
+            plan = plans.get(invoice.id)
+            instalment = plan.next_amount(invoice.amount_ngn or 0) if plan else None
+            creditor = await self._creditor(invoice.business_id)
             message_id = await self._whatsapp.send_template(
                 debtor.phone,
                 self._template_name,
-                _chase_params(invoice, debtor, await self._creditor(invoice.business_id)),
+                _chase_params(invoice, debtor, creditor, instalment),
                 self._template_lang,
             )
             await self._chases.record(invoice.id, now, message_id)

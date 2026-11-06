@@ -21,6 +21,7 @@ from orviqo.adapters.sql_businesses import SqlAlchemyBusinessStore
 from orviqo.adapters.sql_chases import SqlAlchemyChaseStore
 from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
+from orviqo.adapters.sql_plans import SqlAlchemyPlanStore
 from orviqo.adapters.sql_reminders import SqlAlchemyReminderStore
 from orviqo.adapters.sql_sandbox import purge_expired_oauth, purge_sandboxes
 from orviqo.adapters.whatsapp import make_whatsapp_client
@@ -60,6 +61,7 @@ async def run_once() -> tuple[int, int]:
         template_name=settings.whatsapp_chase_template,
         template_lang=settings.whatsapp_template_lang,
         businesses=businesses,
+        plans=SqlAlchemyPlanStore(engine),
     )
     now = datetime.now(UTC)
     try:

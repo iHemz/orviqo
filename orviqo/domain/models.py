@@ -8,7 +8,8 @@ number to the ledger.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+import calendar
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from typing import Literal
 
@@ -86,6 +87,39 @@ class Hold(BaseModel):
         if self.reason == "dispute":
             return "disputed, reminders paused"
         return f"promised by {self.until:%d %b}" if self.until else "promised"
+
+
+class PaymentPlan(BaseModel):
+    """A debt paid in instalments: so much, every week or month, until it's cleared.
+
+    The invoice's ``due_date`` is always the next instalment's date, so the
+    overdue checks, chases and digests need nothing new: a missed instalment is
+    just an overdue debt. Each payment moves it on one period per full instalment.
+    """
+
+    invoice_id: str
+    amount_ngn: int  # each instalment
+    every: Literal["week", "month"]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def advance(self, due: date, periods: int) -> date:
+        """The due date ``periods`` instalments after ``due``."""
+        if self.every == "week":
+            return due + timedelta(weeks=periods)
+        months = due.month - 1 + periods
+        year, month = due.year + months // 12, months % 12 + 1
+        return due.replace(year=year, month=month, day=min(due.day, _days_in(year, month)))
+
+    def next_amount(self, outstanding: int) -> int:
+        """The last instalment is whatever is left."""
+        return min(self.amount_ngn, outstanding)
+
+    def describe(self) -> str:
+        return f"₦{self.amount_ngn:,} {'weekly' if self.every == 'week' else 'monthly'}"
+
+
+def _days_in(year: int, month: int) -> int:
+    return calendar.monthrange(year, month)[1]
 
 
 class Debtor(BaseModel):

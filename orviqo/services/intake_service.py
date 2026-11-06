@@ -23,11 +23,12 @@ from orviqo.adapters.chases import ChaseStore, InMemoryChaseStore
 from orviqo.adapters.debtors import DebtorStore
 from orviqo.adapters.ledger import LedgerStore
 from orviqo.adapters.payments import PaymentStore
+from orviqo.adapters.plans import InMemoryPlanStore, PlanStore
 from orviqo.agents.base import IntakeAgent
 from orviqo.domain.audit import AuditEntry, Decision
 from orviqo.domain.business import BusinessProfile, identify
 from orviqo.domain.intake import IntakeAction, Reminder, Turn
-from orviqo.domain.models import Hold, Invoice, InvoiceStatus, ParsedInvoice
+from orviqo.domain.models import Hold, Invoice, InvoiceStatus, ParsedInvoice, PaymentPlan
 
 _HISTORY_TURNS = 6
 _FALLBACK_ASK = "Sorry, I didn't fully get that — who owes you, how much, and by when?"
@@ -77,8 +78,11 @@ class Reply(BaseModel):
     relay: Relay | None = None
 
 
-def _summary(invoice: Invoice, hold: Hold | None = None) -> str:
+def _summary(invoice: Invoice, hold: Hold | None = None, plan: PaymentPlan | None = None) -> str:
     due = invoice.due_date.isoformat() if invoice.due_date else "no due date"
+    if plan is not None:
+        next_one = plan.next_amount(invoice.amount_ngn or 0)
+        due = f"next ₦{next_one:,} due {due}, paying {plan.describe()}"
     held = f", {hold.describe()}" if hold else ""
     return (
         f"{invoice.debtor_name} owes ₦{invoice.amount_ngn:,} "
@@ -90,10 +94,12 @@ def _confirmation(invoice: Invoice, verb: str) -> str:
     return f"{verb}: {_summary(invoice)}."
 
 
-def _answer_query(open_invoices: list[Invoice], holds: dict[str, Hold]) -> str:
+def _answer_query(
+    open_invoices: list[Invoice], holds: dict[str, Hold], plans: dict[str, PaymentPlan]
+) -> str:
     if not open_invoices:
         return "You have no open debts recorded."
-    lines = "\n".join(f"- {_summary(i, holds.get(i.id))}" for i in open_invoices)
+    lines = "\n".join(f"- {_summary(i, holds.get(i.id), plans.get(i.id))}" for i in open_invoices)
     return f"You have {len(open_invoices)} open debt(s):\n{lines}"
 
 
@@ -168,6 +174,7 @@ class IntakeService:
         businesses: BusinessStore | None = None,
         chases: ChaseStore | None = None,
         today: Callable[[], date] = date.today,
+        plans: PlanStore | None = None,
     ) -> None:
         self._agent = agent
         self._ledger = ledger
@@ -178,6 +185,7 @@ class IntakeService:
         self._businesses = businesses or InMemoryBusinessStore()
         self._chases = chases or InMemoryChaseStore()  # holds: promises and disputes
         self._today = today
+        self._plans = plans or InMemoryPlanStore()
 
     async def handle_message(
         self, business_id: str, text: str, reminders: Sequence[Reminder] = ()
@@ -218,7 +226,14 @@ class IntakeService:
         """
         if open_invoices is None:
             # Only the kinds that match against the ledger pay for reading it.
-            needs_ledger = action.kind in ("query", "payment", "update", "promise", "resume")
+            needs_ledger = action.kind in (
+                "query",
+                "payment",
+                "update",
+                "promise",
+                "resume",
+                "plan",
+            )
             open_invoices = await self._ledger.open_invoices(business_id) if needs_ledger else []
         if action.kind == "greeting":
             reply = Reply(text=_GREETING_REPLY)
@@ -244,6 +259,8 @@ class IntakeService:
             return await self._apply_promise(business_id, source, action, open_invoices)
         if action.kind == "resume":
             return await self._apply_resume(business_id, source, action, open_invoices)
+        if action.kind == "plan":
+            return await self._apply_plan(business_id, source, action, open_invoices)
         if action.kind == "create" and self._can_record(action):
             return await self._apply_create(business_id, source, action)
         return await self._ask(business_id, source, action)
@@ -275,9 +292,12 @@ class IntakeService:
 
         await self._payments.record(target.id, business_id, paid)
         owed = target.amount_ngn or 0
+        plan = await self._plans.get(target.id)
         if paid >= owed:
             settled = target.model_copy(update={"status": InvoiceStatus.paid})
             await self._ledger.update(settled)
+            if plan is not None:
+                await self._plans.remove(target.id)
             if paid > owed:
                 text_out = (
                     f"Settled: {target.debtor_name} — ₦{owed:,} paid, "
@@ -287,14 +307,29 @@ class IntakeService:
                 text_out = f"Settled: {target.debtor_name} — ₦{owed:,} fully paid. [#{target.id}]"
         else:
             outstanding = owed - paid
-            settled = target.model_copy(update={"amount_ngn": outstanding})
+            changes: dict[str, object] = {"amount_ngn": outstanding}
+            plan_note = ""
+            if plan is not None and target.due_date is not None:
+                # One period on per full instalment paid; less than one moves nothing.
+                periods = paid // plan.amount_ngn
+                next_due = plan.advance(target.due_date, periods)
+                changes["due_date"] = next_due
+                plan_note = (
+                    f" Next instalment: ₦{plan.next_amount(outstanding):,} due {next_due:%a %d %b}."
+                )
+                if not periods:
+                    plan_note = (
+                        f" That's less than the ₦{plan.amount_ngn:,} instalment, so the next "
+                        f"one is still due {next_due:%a %d %b}."
+                    )
+            settled = target.model_copy(update=changes)
             await self._ledger.update(settled)
             total = await self._payments.total_paid(target.id)
             original = outstanding + total  # the invoice's original amount, reconstructed
             text_out = (
                 f"Recorded ₦{paid:,} from {target.debtor_name}. "
-                f"₦{total:,} of ₦{original:,} paid, ₦{outstanding:,} still outstanding. "
-                f"[#{target.id}]"
+                f"₦{total:,} of ₦{original:,} paid, ₦{outstanding:,} still outstanding."
+                f"{plan_note} [#{target.id}]"
             )
         reply = Reply(text=text_out, recorded_invoice_id=target.id, invoice=settled)
         return await self._record(business_id, text, Decision.reconciled, action, reply)
@@ -386,6 +421,47 @@ class IntakeService:
         )
         return await self._record(business_id, text, Decision.noted, action, reply)
 
+    async def _apply_plan(
+        self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
+    ) -> Reply:
+        """The owner agrees instalments with a debtor: so much, every week or month."""
+        candidates = _payment_candidates(action, open_invoices)
+        if not candidates:
+            return await self._ask(business_id, text, action, not_found=True)
+        if len(candidates) > 1:
+            return await self._ask_which(business_id, text, action, candidates)
+        target = candidates[0]
+        who = target.debtor_name
+        if not action.amount_ngn or action.plan_every is None:
+            question = f"How much will {who} pay each time, and how often: weekly or monthly?"
+            return await self._record(
+                business_id, text, Decision.asked, action, Reply(text=question)
+            )
+        first = action.due_date
+        if first is None or first < self._today():
+            question = f"When is {who}'s first instalment of ₦{action.amount_ngn:,}?"
+            return await self._record(
+                business_id, text, Decision.asked, action, Reply(text=question)
+            )
+        plan = PaymentPlan(
+            invoice_id=target.id, amount_ngn=action.amount_ngn, every=action.plan_every
+        )
+        await self._plans.set(plan)
+        updated = target.model_copy(update={"due_date": first})
+        await self._ledger.update(updated)
+        owed = target.amount_ngn or 0
+        count = -(-owed // plan.amount_ngn)  # instalments to clear it, the last one smaller
+        reply = Reply(
+            text=(
+                f"Noted: {who} will pay {plan.describe()}, first on {first:%a %d %b}, until "
+                f"the ₦{owed:,} is cleared ({count} instalment{'s' if count != 1 else ''}). "
+                "I'll chase any instalment that's missed. [#" + target.id + "]"
+            ),
+            recorded_invoice_id=target.id,
+            invoice=updated,
+        )
+        return await self._record(business_id, text, Decision.updated, action, reply)
+
     async def _apply_resume(
         self, business_id: str, text: str, action: IntakeAction, open_invoices: list[Invoice]
     ) -> Reply:
@@ -424,8 +500,9 @@ class IntakeService:
             # For a named debtor, enrich each debt with payment progress (bounded N).
             answer = await self._answer_for_debtor(open_invoices, action.debtor_name)
         else:
-            holds = await self._chases.holds([i.id for i in open_invoices])
-            answer = _answer_query(open_invoices, holds)
+            ids = [i.id for i in open_invoices]
+            holds, plans = await self._chases.holds(ids), await self._plans.for_invoices(ids)
+            answer = _answer_query(open_invoices, holds, plans)
         return await self._record(business_id, text, Decision.answered, action, Reply(text=answer))
 
     async def _payment_history(self, business_id: str, text: str, action: IntakeAction) -> Reply:
@@ -460,11 +537,12 @@ class IntakeService:
         matches = [i for i in open_invoices if i.debtor_name.lower() == debtor_name.lower()]
         if not matches:
             return f"You have no open debt recorded for {debtor_name}."
-        holds = await self._chases.holds([i.id for i in matches])
+        ids = [i.id for i in matches]
+        holds, plans = await self._chases.holds(ids), await self._plans.for_invoices(ids)
         parts = []
         for inv in matches:
             paid = await self._payments.total_paid(inv.id)
-            summary = _summary(inv, holds.get(inv.id))
+            summary = _summary(inv, holds.get(inv.id), plans.get(inv.id))
             if paid > 0:  # only show progress once a partial payment exists
                 original = (inv.amount_ngn or 0) + paid
                 summary += f" — ₦{paid:,} of ₦{original:,} paid"
