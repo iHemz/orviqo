@@ -107,6 +107,17 @@ chase_holds = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+# At most one instalment plan per invoice (see domain PaymentPlan); the invoice's
+# due_date is the next instalment's.
+payment_plans = Table(
+    "payment_plans",
+    metadata,
+    Column("invoice_id", String, primary_key=True),
+    Column("amount_ngn", Integer, nullable=False),
+    Column("every", String, nullable=False),  # "week" | "month"
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 # A debtor's contact + consent state, so the owner can have Orviqo chase them.
 # One row per (business, debtor name); `opted_out` is the STOP gate.
 debtors = Table(

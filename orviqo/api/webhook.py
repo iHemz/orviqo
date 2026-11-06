@@ -37,6 +37,7 @@ from orviqo.adapters.sql_debtors import SqlAlchemyDebtorStore
 from orviqo.adapters.sql_ledger import SqlAlchemyLedger
 from orviqo.adapters.sql_oauth import SqlAlchemyOAuthStore
 from orviqo.adapters.sql_payments import SqlAlchemyPaymentStore
+from orviqo.adapters.sql_plans import SqlAlchemyPlanStore
 from orviqo.adapters.sql_processed import SqlAlchemyProcessedMessageStore
 from orviqo.adapters.whatsapp import (
     LoggingWhatsAppClient,
@@ -85,6 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         confidence_threshold=settings.intake_confidence_threshold,
         businesses=businesses,
         chases=chases,
+        plans=SqlAlchemyPlanStore(engine),
     )
     # The web demo runs the same intake, except a debtor number typed into it is
     # held in memory only: never stored, so never chased or routed as a real debtor.
@@ -254,6 +256,8 @@ def _hosted_mcp(engine: AsyncEngine) -> tuple[MCPServer, OrviqoOAuthProvider]:
         debtors=SqlAlchemyDebtorStore(engine),
         audit=SqlAlchemyAuditLog(engine),
         businesses=SqlAlchemyBusinessStore(engine),
+        chases=SqlAlchemyChaseStore(engine),
+        plans=SqlAlchemyPlanStore(engine),
     )
     return build_hosted_server(
         stores,

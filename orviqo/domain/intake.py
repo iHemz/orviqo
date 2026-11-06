@@ -56,6 +56,7 @@ class IntakeAction(BaseModel):
         "promise",
         "resume",
         "history",
+        "plan",
     ]
     invoice_id: str | None = Field(
         default=None, description="Which open invoice to update/settle (update, payment)."
@@ -85,6 +86,10 @@ class IntakeAction(BaseModel):
             "For 'reminder_reply': a promise to pay by a date, a dispute of the debt, "
             "or anything else."
         ),
+    )
+    plan_every: Literal["week", "month"] | None = Field(
+        default=None,
+        description="How often instalments are paid (kind='plan'); amount_ngn is each one.",
     )
     promise_date: date | None = Field(
         default=None,

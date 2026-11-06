@@ -47,9 +47,12 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `ORVIQO_PUBLIC_URL` | optional, the app's public URL (e.g. `https://orviqo.example`): turns on hosted MCP, see step 8 |
 
 4. **Deploy.** The build installs dependencies from `uv.lock`, then runs
-   `alembic upgrade head` (the `[tool.vercel.scripts] build` step) against
-   `DATABASE_URL`, so the schema is always current. Every later push to `main`
-   redeploys automatically.
+   `python -m orviqo.migrate` (the `[tool.vercel.scripts] build` step), which runs
+   `alembic upgrade head` against `DATABASE_URL` on production builds only, so
+   the schema is always current. Every later push to `main` redeploys
+   automatically. Previews skip migrating: they share production's database, and
+   a preview of a branch with a new migration would otherwise move it ahead of
+   `main`, whose next build then fails with "Can't locate revision".
 
 > Preview deployments (other branches) use the same environment variables by
 > default, so they migrate and write to the same database. Fine for a solo
