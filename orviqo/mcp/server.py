@@ -20,8 +20,8 @@ import logging
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
-from typing import Annotated, Any
+from datetime import UTC, date, datetime, timedelta, timezone
+from typing import Annotated, Any, Literal
 
 import anyio
 from mcp.server.mcpserver import MCPServer
@@ -46,13 +46,15 @@ from orviqo.adapters.sql_plans import SqlAlchemyPlanStore
 from orviqo.config import ConfigError, settings
 from orviqo.domain.audit import Decision
 from orviqo.domain.intake import IntakeAction, Reminder, Turn
-from orviqo.domain.models import Invoice
+from orviqo.domain.models import Invoice, InvoiceStatus
 from orviqo.mcp.schemas import (
     DebtList,
     DebtorView,
     DecisionList,
     DecisionView,
     InvoiceView,
+    PaymentHistory,
+    PaymentView,
     ToolResult,
     WriteStatus,
 )
@@ -130,7 +132,7 @@ class Stores:
     chases: ChaseStore = field(default_factory=InMemoryChaseStore)
     plans: PlanStore = field(default_factory=InMemoryPlanStore)
 
-    def intake(self) -> IntakeService:
+    def intake(self, today: Callable[[], date] = date.today) -> IntakeService:
         # confidence 1.0 on every tool action makes the threshold moot: the caller
         # stated each field, so the required-field and ambiguity checks are the gate.
         return IntakeService(
@@ -142,6 +144,7 @@ class Stores:
             businesses=self.businesses,
             chases=self.chases,
             plans=self.plans,
+            today=today,
         )
 
 
@@ -153,6 +156,11 @@ def _trace(tool: str, **fields: Any) -> str:
             continue
         parts.append(f"{key}={json.dumps(value) if isinstance(value, str) else value}")
     return " ".join(parts)
+
+
+def _lagos_date(at: datetime) -> date:
+    """The Lagos calendar day of ``at`` (SQLite hands back naive UTC)."""
+    return (at if at.tzinfo else at.replace(tzinfo=UTC)).astimezone(LAGOS).date()
 
 
 def _status(reply: Reply) -> WriteStatus:
@@ -177,7 +185,7 @@ def build_server(
     ``today`` returns the current Lagos date; tests and evals pin it. ``options`` go
     to ``MCPServer`` (the hosted server passes its OAuth provider and settings).
     """
-    intake = stores.intake()
+    intake = stores.intake(today)  # promise and plan dates are checked against Lagos time
     server = MCPServer(
         "orviqo",
         title="Orviqo receivables ledger",
@@ -187,8 +195,18 @@ def build_server(
     )
 
     async def views(invoices: list[Invoice]) -> list[InvoiceView]:
-        paid = await stores.payments.totals_paid([i.id for i in invoices])
-        return [InvoiceView.of(i, paid[i.id]) for i in invoices]
+        ids = [i.id for i in invoices]
+        paid = await stores.payments.totals_paid(ids)
+        holds, plans = await stores.chases.holds(ids), await stores.plans.for_invoices(ids)
+        return [InvoiceView.of(i, paid[i.id], holds.get(i.id), plans.get(i.id)) for i in invoices]
+
+    def missing(debtor_name: str | None, invoice_id: str | None) -> str:
+        """The question when a write names no open debt."""
+        if invoice_id:
+            return f"There's no open debt #{invoice_id.lstrip('#')}."
+        if debtor_name:
+            return f"There's no open debt for {debtor_name}."
+        return "Which debt? Give the debtor's name or the invoice id."
 
     async def result(reply: Reply) -> ToolResult:
         shown = ([reply.invoice] if reply.invoice else []) + reply.candidates
@@ -287,6 +305,38 @@ def build_server(
         ref = invoice_id.lstrip("#") if invoice_id else None
         entries = await stores.audit.recent(tenant.business_id(), limit, invoice_id=ref)
         return DecisionList(decisions=[DecisionView.of(e) for e in entries])
+
+    @server.tool(annotations=_READ)
+    async def payment_history(debtor_name: Annotated[str, Field(min_length=1)]) -> PaymentHistory:
+        """Every payment a debtor has made to the owner, across all their debts, oldest first.
+
+        Use it for "how much has Chidi paid?" or "when did Ada last pay?". For what
+        a debtor still owes, use list_open_debts. Settled debts are included here.
+        Returns not_found when Orviqo has no debt recorded for that name.
+        """
+        invoices = await stores.ledger.for_debtor(tenant.business_id(), debtor_name.strip())
+        if not invoices:
+            return PaymentHistory(status="not_found", debtor_name=debtor_name)
+        by_id = {i.id: i for i in invoices}
+        paid = sorted(await stores.payments.for_invoices(list(by_id)), key=lambda p: p.created_at)
+        return PaymentHistory(
+            status="found",
+            debtor_name=invoices[0].debtor_name,
+            total_paid_ngn=sum(p.amount_ngn for p in paid),
+            still_owed_ngn=sum(
+                i.amount_ngn or 0 for i in invoices if i.status is InvoiceStatus.open
+            ),
+            payments=[
+                PaymentView(
+                    paid_on=_lagos_date(p.created_at),
+                    amount_ngn=p.amount_ngn,
+                    invoice_id=p.invoice_id,
+                    item=by_id[p.invoice_id].item,
+                    debt_settled=by_id[p.invoice_id].status is InvoiceStatus.paid,
+                )
+                for p in paid
+            ],
+        )
 
     # ── Write tools: all through IntakeService.apply ────────────────────────
 
@@ -432,6 +482,92 @@ def build_server(
         """
         action = IntakeAction(kind="business_name", business_name=name.strip(), confidence=1.0)
         source = _trace("set_business_name", name=name)
+        return await result(await intake.apply(tenant.business_id(), source, action))
+
+    @server.tool(annotations=_IDEMPOTENT_WRITE)
+    async def record_promise(
+        promise_date: Annotated[date, Field(description="When the debtor says they'll pay.")],
+        debtor_name: Annotated[str | None, Field(description="Who promised.")] = None,
+        invoice_id: Annotated[
+            str | None, Field(description="Which debt, when they have several.")
+        ] = None,
+    ) -> ToolResult:
+        """Record that a debtor promised to pay an existing debt by a date. Nothing is paid.
+
+        Reminders to the debtor about that debt pause through the date, then resume
+        on their own if it's still unpaid. For a repeating schedule ("20k every
+        Friday") use set_payment_plan instead. Returns noted; ambiguous when the
+        debtor has several debts; needs_clarification for a date in the past.
+        """
+        action = IntakeAction(
+            kind="promise",
+            debtor_name=debtor_name,
+            invoice_id=invoice_id,
+            promise_date=promise_date,
+            confidence=1.0,
+            clarify=missing(debtor_name, invoice_id),
+        )
+        source = _trace("record_promise", debtor=debtor_name, invoice=invoice_id, by=promise_date)
+        return await result(await intake.apply(tenant.business_id(), source, action))
+
+    @server.tool(annotations=_IDEMPOTENT_WRITE)
+    async def set_payment_plan(
+        instalment_ngn: Annotated[
+            int, Field(gt=0, description="Each instalment, in naira: NOT the debt's total.")
+        ],
+        every: Annotated[Literal["week", "month"], Field(description="How often they pay.")],
+        first_due_date: Annotated[date, Field(description="When the first instalment is due.")],
+        debtor_name: Annotated[str | None, Field(description="Who is paying.")] = None,
+        invoice_id: Annotated[
+            str | None, Field(description="Which debt, when they have several.")
+        ] = None,
+    ) -> ToolResult:
+        """Agree instalments for an existing debt: so much, every week or month.
+
+        The debt's due_date becomes the next instalment's, so a missed instalment
+        is chased like any overdue debt (for the instalment, not the whole
+        balance). Each payment recorded moves it on one period per full
+        instalment. Replaces any earlier plan. Returns updated.
+        """
+        action = IntakeAction(
+            kind="plan",
+            debtor_name=debtor_name,
+            invoice_id=invoice_id,
+            amount_ngn=instalment_ngn,
+            plan_every=every,
+            due_date=first_due_date,
+            confidence=1.0,
+            clarify=missing(debtor_name, invoice_id),
+        )
+        source = _trace(
+            "set_payment_plan",
+            debtor=debtor_name,
+            invoice=invoice_id,
+            instalment=instalment_ngn,
+            every=every,
+            first=first_due_date,
+        )
+        return await result(await intake.apply(tenant.business_id(), source, action))
+
+    @server.tool(annotations=_IDEMPOTENT_WRITE)
+    async def resume_reminders(
+        debtor_name: Annotated[str | None, Field(description="Whose reminders.")] = None,
+        invoice_id: Annotated[str | None, Field(description="Just this debt.")] = None,
+    ) -> ToolResult:
+        """Start reminding a debtor again after a promise or a dispute paused it.
+
+        Use it when the owner says a dispute is sorted, or to drop a promise
+        ("keep chasing Chidi"). Lifts the pause on that debtor's debts (or just
+        invoice_id). Sends nothing itself. Returns noted.
+        """
+        action = IntakeAction(
+            kind="resume",
+            debtor_name=debtor_name,
+            invoice_id=invoice_id,
+            confidence=1.0,
+            clarify=missing(debtor_name, invoice_id),
+        )
+        source = _trace("resume_reminders", debtor=debtor_name, invoice=invoice_id)
         return await result(await intake.apply(tenant.business_id(), source, action))
 
     @server.prompt(title="Orviqo amount conventions")

@@ -62,6 +62,14 @@ def test_an_amount_nobody_said_is_invented() -> None:
     assert invented_amounts(outcome([said, guessed])) == [guessed]
 
 
+def test_an_instalment_nobody_said_is_invented() -> None:
+    said = ToolCall("set_payment_plan", {"instalment_ngn": 50_000, "every": "week"})
+    guessed = ToolCall("set_payment_plan", {"instalment_ngn": 25_000, "every": "week"})
+
+    assert invented_amounts(outcome([said])) == []
+    assert invented_amounts(outcome([guessed])) == [guessed]
+
+
 def test_asking_means_a_question_and_no_write() -> None:
     asked = outcome([], final_text="How much does Mama Nkechi owe?")
     wrote = outcome([], final_text="Recorded. Anything else?", new_audit=[{"decision": "recorded"}])

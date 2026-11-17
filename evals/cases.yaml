@@ -284,3 +284,56 @@
   expect:
     forbid_tools: [record_payment, update_debt, record_debt]
     writes: false
+
+# --- promises, instalments, resuming, history ----------------------------------
+
+- name: promise-by-friday
+  category: promise
+  seed:
+    invoices: [{debtor: Chidi, amount: 150000, item: generator, due: -3d}]
+  messages: ["Chidi says he'll pay on Friday"]
+  expect:
+    tools: [record_promise]
+    forbid_tools: [record_payment, record_debt]
+    writes: true
+    ledger: [{debtor: Chidi, status: open, outstanding: 150000}]
+
+- name: plan-weekly-instalments
+  category: plan
+  seed:
+    invoices: [{debtor: Ada, amount: 100000, item: fabric, due: -1d}]
+  messages: ["Ada will pay 20k every Friday until it's cleared"]
+  expect:
+    tools: [set_payment_plan]
+    forbid_tools: [record_payment, record_debt]
+    writes: true
+    ledger: [{debtor: Ada, outstanding: 100000, due: friday}]
+
+- name: plan-without-instalment-asks
+  category: plan
+  seed:
+    invoices: [{debtor: Ada, amount: 100000, item: fabric}]
+  messages: ["Ada wants to pay in instalments"]
+  expect:
+    forbid_tools: [set_payment_plan, record_payment]
+    writes: false
+    asks: true
+
+- name: resume-after-dispute
+  category: promise
+  seed:
+    invoices: [{debtor: Chidi, amount: 150000, item: generator, due: -3d}]
+  messages: ["Chidi's dispute is sorted, start reminding him again"]
+  expect:
+    tools: [resume_reminders]
+    forbid_tools: [record_payment, update_debt]
+
+- name: history-how-much-paid
+  category: history
+  seed:
+    invoices: [{debtor: Ada, amount: 80000, item: fabric, paid: 30000}]
+  messages: ["How much has Ada paid me so far?"]
+  expect:
+    tools: [payment_history]
+    writes: false
+    says: [["30,000", "30000", "30k"]]
