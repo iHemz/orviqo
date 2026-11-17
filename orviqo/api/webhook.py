@@ -16,9 +16,10 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, nullcontext
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -26,6 +27,7 @@ from mcp.server.mcpserver import MCPServer
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from orviqo import worker
+from orviqo.adapters.alerts import Alerter, describe, make_alerter
 from orviqo.adapters.businesses import BusinessStore
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.debtors import InMemoryDebtorStore
@@ -122,8 +124,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await engine.dispose()
 
 
+class AlertOnError:
+    """ASGI middleware: any request that fails with an error alerts the operator.
+
+    Covers everything served here, the mounted MCP server included. A plain ASGI
+    wrapper rather than ``@app.middleware``, which buffers streaming responses.
+    """
+
+    def __init__(self, app: Any, alerter: Callable[[], Alerter]) -> None:
+        self.app = app
+        self.alerter = alerter
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        try:
+            await self.app(scope, receive, send)
+        except Exception as exc:
+            path = scope.get("path", "")
+            if path.startswith("/mcp/login/"):
+                path = "/mcp/login"  # never the grant id
+            await self.alerter().alert(f"Orviqo error on {path}", describe(exc))
+            raise
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Orviqo — receivables agent", lifespan=lifespan)
+    app.state.alerter = make_alerter(settings.orviqo_alert_ntfy_topic)
+    app.add_middleware(AlertOnError, alerter=lambda: app.state.alerter)
     app.include_router(site_router)
     # Lazy: nothing connects until the first query, so building it here is free.
     app.state.engine = make_engine(settings.database_url)
@@ -137,7 +166,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/cron/collections")
-    async def collections(authorization: str = Header("")) -> Response:
+    async def collections(request: Request, authorization: str = Header("")) -> Response:
         """One collections pass (owner digests + debtor chases), for a daily scheduler.
 
         Vercel Cron calls this with ``Authorization: Bearer <CRON_SECRET>``; anything
@@ -148,6 +177,10 @@ def create_app() -> FastAPI:
         if not secrets.compare_digest(authorization, f"Bearer {settings.cron_secret}"):
             return Response(status_code=401)
         reminded, chased = await worker.run_once()
+        # A sign of life: if this stops arriving, the daily run has stopped running.
+        await request.app.state.alerter.alert(
+            "Orviqo daily run", f"Sent {reminded} digest(s), {chased} chase(s).", urgent=False
+        )
         return Response(f"sent {reminded} digest(s), {chased} chase(s)", media_type="text/plain")
 
     @app.get("/start")

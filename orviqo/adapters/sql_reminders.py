@@ -15,9 +15,7 @@ class SqlAlchemyReminderStore:
         self._engine = engine
 
     async def last_reminder_at(self, business_id: str) -> datetime | None:
-        stmt = select(func.max(reminders.c.sent_at)).where(
-            reminders.c.business_id == business_id
-        )
+        stmt = select(func.max(reminders.c.sent_at)).where(reminders.c.business_id == business_id)
         async with self._engine.connect() as conn:
             return (await conn.execute(stmt)).scalar()
 

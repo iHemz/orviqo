@@ -109,8 +109,11 @@ more users than the unverified cap allows.
 
 ## Reliability / ops backlog
 
-- [ ] **Observability.** Structured logs / error alerting for worker + webhook
-      failures (currently `logging.exception` only).
+- [x] **Error alerting.** Any failed request (webhook, daily run, MCP) and a
+      daily-run summary go to the operator's phone via ntfy.sh (free, no account),
+      throttled, carrying only the route and error type. See [deploy.md](deploy.md).
+- [ ] **Structured logs.** Logs are plain text, and Vercel Hobby keeps an hour;
+      a free log drain would keep them longer when debugging needs it.
 - [x] **Webhook signature verification.** Meta's `X-Hub-Signature-256` is checked
       against `WHATSAPP_APP_SECRET`; unsigned or forged POSTs get a 401, and with
       real credentials but no secret the webhook fails closed (503).

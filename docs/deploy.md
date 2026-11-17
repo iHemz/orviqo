@@ -44,6 +44,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` | optional, see step 4 |
 | `WHATSAPP_DISPLAY_NUMBER` | optional, turns on `/start` and the "Chat on WhatsApp" button |
 | `ORVIQO_CONTACT_EMAIL` | optional, the privacy contact shown on `/privacy` (else the WhatsApp number) |
+| `ORVIQO_ALERT_NTFY_TOPIC` | optional, a long random ntfy.sh topic for error alerts and the daily summary, see step 5 |
 | `ORVIQO_PUBLIC_URL` | optional, the app's public URL (e.g. `https://orviqo.example`): turns on hosted MCP, see step 8 |
 
 4. **Deploy.** The build installs dependencies from `uv.lock`, then runs
@@ -156,6 +157,23 @@ in Lagos). Vercel sends `Authorization: Bearer <CRON_SECRET>`; any other caller
 gets a 401, and without `CRON_SECRET` the route returns 503. Each run sends the
 owner digests, then the debtor chases. Web-demo businesses are always skipped.
 Hobby runs land somewhere within the scheduled hour.
+
+### Alerts
+
+Vercel's free plan keeps an hour of logs, so set up alerts to hear about failures.
+Install the free **ntfy** app (Android, iOS, or ntfy.sh in a browser), subscribe to
+a topic named with something long and random (e.g. `orviqo-` plus
+`python -c "import secrets; print(secrets.token_urlsafe(16))"`), and set the same
+name as `ORVIQO_ALERT_NTFY_TOPIC`. No account is needed, and it costs nothing.
+
+- **Any request that fails** (the webhook, the daily run, the MCP server) sends a
+  high-priority alert, at most once per 10 minutes for the same route.
+- **Each daily run** sends a quiet summary ("Sent 3 digest(s), 1 chase(s)."). If
+  it stops arriving, the cron has stopped running.
+
+Anyone who knows a topic's name can read it, so alerts carry only the route and
+the error's type (with the status code when Meta or another service refused),
+never message text, names or numbers. The details are in Vercel's logs.
 
 Run a pass by hand:
 
