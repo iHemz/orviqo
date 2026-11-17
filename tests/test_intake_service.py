@@ -542,7 +542,8 @@ async def test_the_ack_says_where_a_reply_went_and_how_to_correct_it(make_agent)
             InMemoryDebtorStore(),
         )
 
-    plain = await service().handle_message("me", "Paid 20k", [_reminder()])
+    # An unquoted "Paid 20k" gets a question first (tests/test_intake_guards.py).
+    plain = await service().handle_message("me", "I've sent it", [_reminder()])
     quoted = await service().handle_message(
         "me", "Paid 20k", [_reminder().model_copy(update={"quoted": True})]
     )
