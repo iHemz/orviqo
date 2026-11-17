@@ -39,7 +39,7 @@ from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import Evaluator, EvaluatorContext
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from evals.checks import Outcome, check, invented_amounts
+from evals.checks import Outcome, call_amounts, check, invented_amounts
 from evals.harness import CaseSpec, run_case
 
 HERE = Path(__file__).resolve().parent
@@ -159,9 +159,7 @@ def render(report: Any, specs: list[CaseSpec], model: str, today: date) -> tuple
     failures = list(report.failures)
 
     invented = sum(len(invented_amounts(c.output)) for c in cases)
-    amount_calls = sum(
-        1 for c in cases for call in c.output.tool_calls if call.args.get("amount_ngn") is not None
-    )
+    amount_calls = sum(1 for c in cases for call in c.output.tool_calls if call_amounts(call))
     tool_cases = [c for c in cases if {"tools", "forbid_tools"} & set(by_name[c.name].expect)]
     tool_ok = [
         c

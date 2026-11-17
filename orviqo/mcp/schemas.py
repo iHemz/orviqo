@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from orviqo.domain.audit import AuditEntry, Decision
-from orviqo.domain.models import Debtor, Invoice, InvoiceStatus
+from orviqo.domain.models import Debtor, Hold, Invoice, InvoiceStatus, PaymentPlan
 
 WriteStatus = Literal[
     "recorded",
@@ -36,9 +36,26 @@ class InvoiceView(BaseModel):
     status: InvoiceStatus
     amount_outstanding_ngn: int = Field(description="Naira still owed. 0 once paid.")
     amount_paid_ngn: int = Field(description="Naira paid so far against this debt.")
+    reminders_held: str | None = Field(
+        default=None,
+        description=(
+            'Why reminders about this debt are paused, if they are: "promised by 13 Nov" '
+            '(until that date) or "disputed, reminders paused" (until resume_reminders).'
+        ),
+    )
+    payment_plan: str | None = Field(
+        default=None,
+        description='Its instalments, if any, e.g. "₦20,000 weekly"; due_date is the next one.',
+    )
 
     @classmethod
-    def of(cls, invoice: Invoice, paid_ngn: int) -> InvoiceView:
+    def of(
+        cls,
+        invoice: Invoice,
+        paid_ngn: int,
+        hold: Hold | None = None,
+        plan: PaymentPlan | None = None,
+    ) -> InvoiceView:
         # A partial payment lowers the invoice's amount; a settled one keeps it, so
         # an invoice that isn't open has nothing outstanding.
         open_ = invoice.status is InvoiceStatus.open
@@ -51,6 +68,8 @@ class InvoiceView(BaseModel):
             status=invoice.status,
             amount_outstanding_ngn=outstanding,
             amount_paid_ngn=paid_ngn,
+            reminders_held=hold.describe() if hold and open_ else None,
+            payment_plan=plan.describe() if plan and open_ else None,
         )
 
 
@@ -77,6 +96,22 @@ class DebtList(BaseModel):
     count: int = Field(description="How many debts matched (before the limit).")
     total_outstanding_ngn: int = Field(description="Naira outstanding across all matches.")
     truncated: bool = Field(description="True when `debts` holds only the first `limit`.")
+
+
+class PaymentView(BaseModel):
+    paid_on: date
+    amount_ngn: int
+    invoice_id: str
+    item: str | None
+    debt_settled: bool = Field(description="True when that debt is now fully paid.")
+
+
+class PaymentHistory(BaseModel):
+    status: Literal["found", "not_found"]
+    debtor_name: str
+    total_paid_ngn: int = 0
+    still_owed_ngn: int = Field(default=0, description="Naira outstanding across their debts.")
+    payments: list[PaymentView] = Field(default=[], description="Oldest first.")
 
 
 class DebtorView(BaseModel):

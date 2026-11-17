@@ -51,7 +51,13 @@ async def debt(stores: Stores, name: str, amount: int, business_id: str = BIZ, *
     return (await stores.ledger.add(parsed, business_id)).id
 
 
-READ_TOOLS = {"list_open_debts", "list_overdue", "get_debtor", "explain_decisions"}
+READ_TOOLS = {
+    "list_open_debts",
+    "list_overdue",
+    "get_debtor",
+    "explain_decisions",
+    "payment_history",
+}
 
 
 async def list_tools(server: MCPServer) -> dict[str, Any]:

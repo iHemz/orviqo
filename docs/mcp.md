@@ -138,10 +138,11 @@ class ToolResult(BaseModel):
 
 | Tool | Args | Returns |
 |------|------|---------|
-| `list_open_debts` | `debtor_name: str \| None` | Open invoices for the business, each with `amount_outstanding_ngn`, `amount_paid_ngn` (from `PaymentStore.total_paid`), `item`, `due_date`, `id`. Filtered by name, case-insensitive, when given. |
+| `list_open_debts` | `debtor_name: str \| None` | Open invoices for the business, each with `amount_outstanding_ngn`, `amount_paid_ngn` (from `PaymentStore.total_paid`), `item`, `due_date`, `id`, and `reminders_held` / `payment_plan` when a promise, dispute or instalment plan applies. Filtered by name, case-insensitive, when given. |
 | `list_overdue` | `as_of: date \| None` (default today, Africa/Lagos) | Open invoices past due, **this business only**. |
 | `get_debtor` | `name: str` | Saved phone (masked to the last 4 digits), `opted_out`, and their open debts. `not_found` if unknown. |
 | `explain_decisions` | `invoice_id: str \| None`, `limit: int = 10` (max 50) | Audit entries: `message`, `decision`, `confidence`, `reason`, `created_at`. This is the "why did Orviqo do that?" tool, and refusals are included. |
+| `payment_history` | `debtor_name: str` | Every payment from that debtor across all their debts, settled ones included, oldest first, with `total_paid_ngn` and `still_owed_ngn`. `not_found` if no debt is recorded for the name. |
 
 ### Write tools (through `IntakeService.apply`)
 
@@ -151,9 +152,13 @@ class ToolResult(BaseModel):
 | `update_debt` | `invoice_id: str`, plus any of `debtor_name`, `amount_ngn`, `item`, `due_date` | Changes only the fields given. `not_found` if the invoice isn't open. |
 | `record_payment` | `debtor_name: str \| None`, `invoice_id: str \| None`, `amount_ngn: int \| None`, `paid_in_full: bool = False` | Exactly the WhatsApp payment rules: several matching debts → `ambiguous` with candidates, nothing written. No amount and not `paid_in_full` → `needs_clarification`. Overpayment is surfaced in `message`. |
 | `save_debtor_contact` | `debtor_name: str`, `phone: str` | Upserts the contact. Must preserve an existing opt-out (the store already does, so test it through the tool). |
+| `record_promise` | `promise_date: date`, `debtor_name` or `invoice_id` | Pauses reminders about that debt through the date (`noted`). A past date → `needs_clarification`; several debts → `ambiguous`. Nothing is paid. |
+| `set_payment_plan` | `instalment_ngn: int` (each instalment, > 0), `every: "week" \| "month"`, `first_due_date: date`, `debtor_name` or `invoice_id` | Instalments for an existing debt (`updated`): its `due_date` becomes the next instalment's, and each `record_payment` moves it on one period per full instalment. |
+| `resume_reminders` | `debtor_name` or `invoice_id` | Lifts a promise or dispute pause (`noted`). Sends nothing itself. |
 
-Deliberately absent: delete anything, mark disputed, chase or message a debtor, change
-opt-out state, read another business.
+Deliberately absent: delete anything, mark disputed (only a debtor's own reply to a
+reminder does that), chase or message a debtor, change opt-out state, read another
+business.
 
 Also expose the system prompt's amount conventions to callers as an MCP **prompt** or in
 the server instructions: naira only, integers, "150k" means 150000.

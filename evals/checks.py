@@ -12,7 +12,17 @@ from datetime import date, timedelta
 from typing import Any
 
 # Tools that change the ledger, and the audit decisions that mean "written".
-WRITE_TOOLS = {"record_debt", "update_debt", "record_payment", "save_debtor_contact"}
+WRITE_TOOLS = {
+    "record_debt",
+    "update_debt",
+    "record_payment",
+    "save_debtor_contact",
+    "record_promise",
+    "set_payment_plan",
+    "resume_reminders",
+}
+# The arguments that carry naira: each must be a number somebody said.
+AMOUNT_ARGS = ("amount_ngn", "instalment_ngn")
 WRITE_DECISIONS = {"recorded", "updated", "reconciled", "noted"}
 
 _AMOUNT = re.compile(
@@ -80,14 +90,18 @@ class Outcome:
         return not self.wrote and "?" in self.final_text
 
 
+def call_amounts(call: ToolCall) -> list[int]:
+    """The naira amounts a tool call carries."""
+    return [int(call.args[a]) for a in AMOUNT_ARGS if call.args.get(a) is not None]
+
+
 def invented_amounts(outcome: Outcome) -> list[ToolCall]:
     """Write calls carrying an amount nobody said and the ledger never held."""
     return [
         call
         for call in outcome.tool_calls
         if call.name in WRITE_TOOLS
-        and call.args.get("amount_ngn") is not None
-        and int(call.args["amount_ngn"]) not in outcome.allowed_amounts
+        and any(a not in outcome.allowed_amounts for a in call_amounts(call))
     ]
 
 

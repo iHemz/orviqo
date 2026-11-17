@@ -26,6 +26,9 @@ async def test_write_tools_are_listed_and_record_debt_demands_an_amount() -> Non
         "record_payment",
         "save_debtor_contact",
         "set_business_name",
+        "record_promise",
+        "set_payment_plan",
+        "resume_reminders",
     }
     assert set(tools) == READ_TOOLS | writes
     for name in writes:
