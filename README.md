@@ -123,6 +123,22 @@ model then asked how much. The cases are synthetic and the set is small: a
 regression check, not evidence of real-world accuracy. Full report in
 [`evals/results/`](evals/results/).
 
+`make eval-intake` checks the agent behind WhatsApp the same way: 37 owner
+messages, each with its context (open debts, reminders received, recent chat),
+one model call each, no LLM judge. Run on Gemini Flash-Lite, 2026-11-17:
+
+| Metric | Result |
+|--------|--------|
+| Invented-amount rate (must be 0) | **0 / 13** decisions carrying an amount |
+| Cases passed | 35 / 37 |
+| Asked when it should | 3 / 4 |
+
+The two misses passed on an earlier run the same day, so they are the model
+wavering, and both matter. "Chidi also took 2 bags of rice, 30k" was read as a
+change to Chidi's existing debt instead of a new one, and an unquoted "Paid 20k"
+was passed to the creditor who had sent a reminder instead of asking whose
+payment it was. Report in [`evals/results/`](evals/results/).
+
 ## Models
 
 The intake model is one env var, `ORVIQO_INTAKE_MODEL`: a Pydantic AI model
