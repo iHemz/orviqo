@@ -39,13 +39,13 @@ running balance → two-way replies**, multi-tenant by the owner's WhatsApp numb
   Gemini's free tier; the LLM provider is one env var (see
   [deploy.md](deploy.md)).
 
-## The big gap — distribution & onboarding
+## Distribution & onboarding
 
-**Anyone can now try Orviqo on the web, but WhatsApp isn't open to the public
-yet.** The setup was made with the Meta app unpublished and the owner's own
-phone added as a tester, and Meta's test number only reaches up to 5
-allowlisted phones. The onboarding pieces are built; the remaining gap is a
-real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
+**Orviqo is live on WhatsApp for anyone** (since 2026-11-06): a real registered
+number, a permanent token, and the Meta app published, without Business
+Verification. Confirmed with numbers that were never on the allowlist. The
+remaining work is scale: messaging limits, and verification once there are
+more users than the unverified cap allows.
 
 - [x] **First-run onboarding.** A sender with no prior turns gets a welcome (what
       Orviqo does + example messages). If their first message is actionable it is
@@ -54,14 +54,21 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
       with "Hi Orviqo"; `tools/entry_qr.py` makes its QR code. Live once
       `WHATSAPP_DISPLAY_NUMBER` is set (see [deploy.md](deploy.md)). The landing
       page shows a "Chat on WhatsApp" button when it is.
-- [ ] **A real WhatsApp number.** Register a number that isn't on WhatsApp yet
-      (a spare SIM) on the WhatsApp Business Account, switch the Meta app to
-      Live (needs a privacy policy URL), and swap in a permanent System User
-      token (the dashboard token in local `.env` expired 2026-07-12). Until
-      then, WhatsApp is a demo for allowlisted phones only.
-- [ ] **Messaging limits & verification.** The WhatsApp number starts at a low
-      tier (a few hundred unique users/day). Scaling needs Meta Business
-      Verification and climbing the messaging tiers via good quality ratings.
+- [x] **A real WhatsApp number, open to the public.** A number registered on the
+      WhatsApp Business Account, a permanent System User token, and the Meta app
+      published. Publishing needed `/privacy` (with data deletion instructions at
+      `/privacy#delete-your-data`), an app icon and a category; not Business
+      Verification.
+- [x] **Owner digests outside the 24h window.** Free text when the owner wrote in
+      the last 24h, the approved digest template otherwise (see
+      [deploy.md](deploy.md)).
+- [ ] **Messaging limits & verification.** Unverified, the number can start about
+      250 conversations a day (reminders, digests); replies to people who message
+      Orviqo aren't capped. Beyond that needs Meta Business Verification (a CAC
+      registration) and climbing the tiers through good quality ratings.
+- [ ] **Self-serve data deletion.** Deletion requests are handled by hand today
+      (the privacy page promises 30 days). A "delete my data" WhatsApp command,
+      confirmed before it runs, would do it automatically.
 - [ ] **Account/number strategy.** One shared Orviqo business number for all
       owners (current model, tenant = sender phone) vs. per-owner numbers. Shared
       is right for now; revisit at scale.
@@ -97,9 +104,8 @@ real, public WhatsApp number and a token that doesn't expire. Concrete backlog:
 
 - [x] **Hosted MCP (v2).** Streamable HTTP + OAuth at `/mcp`, so owners connect
       from claude.ai or ChatGPT without running anything. Owners sign in by sending
-      a link code to the Orviqo WhatsApp number (so, like WhatsApp itself, real
-      sign-in is limited to allowlisted phones until the number is public); anyone
-      can take a seeded demo ledger. See [mcp.md](mcp.md#hosted-v2).
+      a link code to the Orviqo WhatsApp number, which anyone can message; anyone
+      can also take a seeded demo ledger. See [mcp.md](mcp.md#hosted-v2).
 
 ## Reliability / ops backlog
 
