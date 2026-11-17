@@ -12,6 +12,7 @@ already decided the action (the MCP server, whose caller fills a typed schema).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from datetime import date
 
@@ -162,6 +163,18 @@ def _payment_candidates(action: IntakeAction, open_invoices: list[Invoice]) -> l
     return []
 
 
+# "Paid 20k", "sent 10,000", "transferred it, 5k": a payment, with a number in it.
+_PAYMENT_WORDS = re.compile(r"\b(paid|pay|sent|send|transferred|transfer|cleared|settled)\b", re.I)
+
+
+def _different_item(new: str | None, old: str | None) -> bool:
+    """Two named items that aren't the same thing ("rice" vs "generator")."""
+    if not new or not old:
+        return False
+    a, b = new.casefold().strip(), old.casefold().strip()
+    return a not in b and b not in a
+
+
 class IntakeService:
     def __init__(
         self,
@@ -195,6 +208,9 @@ class IntakeService:
         open_invoices = await self._ledger.open_invoices(business_id)
         history = await self._recent_turns(business_id)
         action = await self._agent.decide(text, open_invoices, history, reminders)
+        second_look = await self._second_look(business_id, text, action, open_invoices, reminders)
+        if second_look is not None:
+            return second_look
         if history or action.kind == "reminder_reply":
             # Answering a reminder isn't signing up: no welcome in front of the ack.
             return await self.apply(business_id, text, action, open_invoices, reminders)
@@ -208,6 +224,62 @@ class IntakeService:
             )
         reply = await self.apply(business_id, text, action, open_invoices, reminders)
         return reply.model_copy(update={"welcome": WELCOME})
+
+    async def _second_look(
+        self,
+        business_id: str,
+        text: str,
+        action: IntakeAction,
+        open_invoices: list[Invoice],
+        reminders: Sequence[Reminder],
+    ) -> Reply | None:
+        """Ask instead of acting on the two readings the evals show the model wavers on.
+
+        Both would be costly mistakes, so they are caught here, in code, rather than
+        left to the prompt. Only for free text: an MCP caller states each field.
+        """
+        if action.kind == "update":
+            target = _find(open_invoices, action.invoice_id)
+            if (
+                target is not None
+                and action.amount_ngn is not None
+                and _different_item(action.item, target.item)
+            ):
+                # "Chidi also took rice, 30k" read as an update would overwrite the
+                # generator debt's ₦150,000 with ₦30,000.
+                question = (
+                    f"Is that a new debt for {target.debtor_name} (₦{action.amount_ngn:,} for "
+                    f"{action.item}), or a change to their {target.item} debt "
+                    f"(₦{target.amount_ngn:,})?"
+                )
+                return await self._record(
+                    business_id, text, Decision.asked, action, Reply(text=question)
+                )
+        if (
+            action.kind == "reminder_reply"
+            and action.reply_type not in ("promise", "dispute")
+            and reminders
+            and not any(r.quoted for r in reminders)
+            and re.search(r"\d", text)
+            and _PAYMENT_WORDS.search(text)
+        ):
+            last = await self._audit.recent(business_id, 1)
+            if not (last and last[0].decision is Decision.asked):
+                # An unnamed "Paid 20k" that isn't a swipe-reply could be them paying
+                # the reminder, or a customer paying them: relaying the wrong one tells
+                # a business it was paid when it wasn't.
+                reminder = reminders[0]
+                about = f"the ₦{reminder.amount_ngn:,} reminder from {_creditor(reminder)}"
+                if len(reminders) > 1:
+                    about = "a payment reminder you received"
+                question = (
+                    f"Is that about {about}, or did one of your customers pay you? "
+                    "If a customer, tell me who."
+                )
+                return await self._record(
+                    business_id, text, Decision.asked, action, Reply(text=question)
+                )
+        return None
 
     async def apply(
         self,
