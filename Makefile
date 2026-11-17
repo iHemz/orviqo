@@ -1,5 +1,5 @@
 # Common developer tasks. On Windows without `make`, run the commands directly.
-.PHONY: dev lint format typecheck test simulate worker migrate revision run try eval check
+.PHONY: dev lint format typecheck test simulate worker migrate revision run try eval eval-intake check
 
 dev:            ## Sync the venv from uv.lock (deps + dev tools)
 	uv sync
@@ -36,5 +36,8 @@ try:            ## Try the intake agent (needs ANTHROPIC_API_KEY)
 
 eval:           ## Model evals for the MCP server (needs GOOGLE_API_KEY; not in CI). [only=...] [model=...]
 	uv run --group eval python -m evals.run $(if $(only),--only $(only)) $(if $(model),--model $(model))
+
+eval-intake:    ## Model evals for the WhatsApp intake agent (free eval key; not in CI). [only=...] [model=...]
+	uv run --group eval python -m evals.intake $(if $(only),--only $(only)) $(if $(model),--model $(model))
 
 check: lint test  ## What CI runs

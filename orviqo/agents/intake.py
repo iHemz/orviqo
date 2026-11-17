@@ -206,12 +206,15 @@ class PydanticAIIntakeAgent:
     has no side effects. Construction needs the provider's API key in the
     environment — Pydantic AI infers the provider eagerly — which
     ``config.bootstrap()`` guarantees before any entry point builds the agent.
-    ``model`` may list several models (see ``build_model``).
+    ``model`` may list several models (see ``build_model``), or be a built
+    ``Model`` (the evals pass one bound to their own API key).
     """
 
-    def __init__(self, model: str | None = None) -> None:
+    def __init__(self, model: str | Model | None = None) -> None:
+        if not isinstance(model, Model):
+            model = build_model(model or settings.orviqo_intake_model)
         self._agent = Agent(
-            build_model(model or settings.orviqo_intake_model),
+            model,
             output_type=IntakeAction,
             system_prompt=_SYSTEM_PROMPT,
             # Thinking off: this is a quick classification a person is waiting on,

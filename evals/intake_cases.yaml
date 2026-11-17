@@ -1,0 +1,288 @@
+# Eval cases for the WhatsApp intake agent. Synthetic and small: a regression check
+# on how a real model reads one owner's message, not evidence of real-world accuracy.
+#
+# Each case is ONE message and the context the agent would see with it:
+#   invoices:  the sender's open debts (money owed TO them)
+#   reminders: payment reminders the sender received (money THEY owe others);
+#              `quoted: true` means they swipe-replied to that reminder
+#   history:   recent turns, oldest first, as [owner said, Orviqo replied]
+# Dates are relative to the run's day in Lagos: "+3d", "-10d", or a weekday
+# ("friday" = the next Friday), as in evals/cases.yaml.
+#
+# expect keys (scored by evals/intake_checks.py):
+#   kind (one, or a list of acceptable kinds), debtor, invoice_id, reminder_id,
+#   reply_type, plan_every, paid_in_full, amount_ngn, due_date, promise_date
+#   (null = must be unset), unset (fields that must be empty).
+# Every case is also scored for an invented amount: a number nobody said.
+
+# --- recording ---------------------------------------------------------------
+
+- name: create-with-item-and-day
+  category: create
+  message: "Chidi owes me 150k for the generator, due Friday"
+  expect: {kind: create, debtor: Chidi, amount_ngn: 150000, due_date: friday}
+
+- name: create-naira-sign-no-due
+  category: create
+  message: "Ada owes ₦45,000 for fabric"
+  expect: {kind: create, debtor: Ada, amount_ngn: 45000, due_date: null}
+
+- name: create-millions
+  category: create
+  message: "Mama Nkechi is owing 1.5m for the cement"
+  expect: {kind: create, debtor: Mama Nkechi, amount_ngn: 1500000}
+
+- name: create-second-debt-same-person
+  category: create
+  message: "Chidi also took 2 bags of rice, 30k, pay next week"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: create, debtor: Chidi, amount_ngn: 30000}
+
+- name: update-due-date
+  category: update
+  message: "Move Chidi's generator debt to the 30th"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: update, invoice_id: a1b2c3d4, unset: [amount_ngn]}
+
+- name: update-corrected-amount
+  category: update
+  message: "Sorry, Ada's own is 40k not 45k"
+  invoices:
+    - {id: e5f6a7b8, debtor: Ada, amount: 45000, item: fabric, due: null}
+  expect: {kind: update, invoice_id: e5f6a7b8, amount_ngn: 40000}
+
+- name: answer-to-how-much
+  category: update
+  message: "50k"
+  history:
+    - ["Tunde owes me for the phone", "How much does Tunde owe for the phone?"]
+  expect: {kind: [create, update], debtor: Tunde, amount_ngn: 50000}
+
+# --- the rigor rule: never invent an amount -------------------------------------
+
+- name: no-amount-asks
+  category: rigor
+  message: "Bola owes me for the shoes"
+  expect: {kind: clarify, unset: [amount_ngn]}
+
+- name: statement-not-query-no-amount
+  category: rigor
+  message: "Tunde still hasn't paid me"
+  expect: {kind: clarify, unset: [amount_ngn]}
+
+- name: due-date-no-amount
+  category: rigor
+  message: "Add a debt for Bola, she'll pay next Friday"
+  expect: {kind: clarify, unset: [amount_ngn]}
+
+# --- questions about the sender's own ledger ---------------------------------------
+
+- name: who-owes-me
+  category: query
+  message: "Who owes me?"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: query, debtor: null}
+
+- name: what-does-x-owe
+  category: query
+  message: "How much does Chidi owe me?"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: query, debtor: Chidi}
+
+- name: who-do-i-owe-is-not-who-owes-me
+  category: my_debts
+  message: "Who do I owe?"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: my_debts}
+
+- name: history-how-much-paid
+  category: history
+  message: "How much has Chidi paid me so far?"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 110000, item: generator, due: -2d}
+  expect: {kind: history, debtor: Chidi}
+
+- name: history-last-payment
+  category: history
+  message: "When last did Ada pay?"
+  invoices:
+    - {id: e5f6a7b8, debtor: Ada, amount: 45000, item: fabric, due: null}
+  expect: {kind: history, debtor: Ada}
+
+# --- payments --------------------------------------------------------------------
+
+- name: partial-payment
+  category: payment
+  message: "Chidi paid 40k"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: payment, invoice_id: a1b2c3d4, amount_ngn: 40000, paid_in_full: false}
+
+- name: paid-in-full-no-number
+  category: payment
+  message: "Ada has cleared her debt"
+  invoices:
+    - {id: e5f6a7b8, debtor: Ada, amount: 45000, item: fabric, due: null}
+  expect: {kind: payment, invoice_id: e5f6a7b8, paid_in_full: true, unset: [amount_ngn]}
+
+- name: payment-named-after-reminder-is-own-ledger
+  category: payment
+  message: "Bola paid me 20k"
+  invoices:
+    - {id: c9d0e1f2, debtor: Bola, amount: 60000, item: shoes, due: -5d}
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d}
+  expect: {kind: payment, invoice_id: c9d0e1f2, amount_ngn: 20000}
+
+# --- contacts and business name ------------------------------------------------------
+
+- name: save-contact
+  category: contact
+  message: "Chidi's number is 0803 123 4567"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: contact, debtor: Chidi, unset: [amount_ngn]}
+
+- name: business-name
+  category: business_name
+  message: "My business name is Ada Fabrics"
+  expect: {kind: business_name, unset: [amount_ngn]}
+
+- name: greeting
+  category: greeting
+  message: "Good morning Orviqo"
+  expect: {kind: greeting, unset: [amount_ngn, debtor_name]}
+
+# --- answering a reminder someone else sent -----------------------------------------
+
+- name: reminder-promise-with-date
+  category: reminder_reply
+  message: "I'll pay this Friday"  # "next Friday" is honestly either of two dates
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d}
+  expect: {kind: reminder_reply, reminder_id: ff00aa11, reply_type: promise, promise_date: friday}
+
+- name: reminder-dispute
+  category: reminder_reply
+  message: "I don't owe you that, I paid in October"
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d}
+  expect: {kind: reminder_reply, reminder_id: ff00aa11, reply_type: dispute}
+
+- name: reminder-wrong-amount-is-dispute
+  category: reminder_reply
+  message: "It was 30k not 50k"
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d, quoted: true}
+  expect: {kind: reminder_reply, reminder_id: ff00aa11, reply_type: dispute}
+
+- name: reminder-ack-other
+  category: reminder_reply
+  message: "Ok, noted"
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d, quoted: true}
+  expect: {kind: reminder_reply, reminder_id: ff00aa11, reply_type: other}
+
+- name: quoted-unnamed-payment-is-reply
+  category: reminder_reply
+  message: "Paid 20k"
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d, quoted: true}
+  invoices:
+    - {id: c9d0e1f2, debtor: Bola, amount: 60000, item: shoes, due: -5d}
+  expect: {kind: reminder_reply, reminder_id: ff00aa11}
+
+- name: unquoted-unnamed-payment-asks
+  category: reminder_reply
+  message: "Paid 20k"
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d}
+  invoices:
+    - {id: c9d0e1f2, debtor: Bola, amount: 60000, item: shoes, due: -5d}
+  expect: {kind: clarify}
+
+- name: new-debt-right-after-reminder
+  category: reminder_reply
+  message: "Emeka owes me 25k for bread"
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d, quoted: true}
+  expect: {kind: create, debtor: Emeka, amount_ngn: 25000}
+
+- name: who-do-i-owe-after-reminder
+  category: my_debts
+  message: "How much do I owe?"
+  reminders:
+    - {id: ff00aa11, creditor: Ada Fabrics, debtor: Kunle, amount: 50000, item: lace, due: -3d}
+  invoices:
+    - {id: c9d0e1f2, debtor: Bola, amount: 60000, item: shoes, due: -5d}
+  expect: {kind: my_debts}
+
+# --- promises, disputes and resuming (owner side) ------------------------------------
+
+- name: owner-records-promise
+  category: promise
+  message: "Chidi says he'll pay on Friday"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: promise, invoice_id: a1b2c3d4, promise_date: friday, unset: [amount_ngn]}
+
+- name: owner-promise-relative
+  category: promise
+  message: "Ada promised to pay in 10 days"
+  invoices:
+    - {id: e5f6a7b8, debtor: Ada, amount: 45000, item: fabric, due: -1d}
+  expect: {kind: promise, invoice_id: e5f6a7b8, promise_date: +10d}
+
+- name: resume-after-dispute
+  category: resume
+  message: "Chidi's dispute is sorted, remind him again"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect: {kind: resume, debtor: Chidi, unset: [amount_ngn]}
+
+- name: resume-keep-chasing
+  category: resume
+  message: "Keep chasing Ada"
+  invoices:
+    - {id: e5f6a7b8, debtor: Ada, amount: 45000, item: fabric, due: -1d}
+  expect: {kind: resume, debtor: Ada}
+
+# --- instalments ----------------------------------------------------------------------
+
+- name: plan-weekly
+  category: plan
+  message: "Chidi will pay 20k every Friday"
+  invoices:
+    - {id: a1b2c3d4, debtor: Chidi, amount: 150000, item: generator, due: -2d}
+  expect:
+    kind: plan
+    invoice_id: a1b2c3d4
+    amount_ngn: 20000
+    plan_every: week
+    due_date: friday
+
+- name: plan-monthly-from-date
+  category: plan
+  message: "Ada is paying 15k monthly starting 1 December"
+  invoices:
+    - {id: e5f6a7b8, debtor: Ada, amount: 45000, item: fabric, due: -1d}
+  expect: {kind: plan, invoice_id: e5f6a7b8, amount_ngn: 15000, plan_every: month}
+
+- name: plan-not-a-new-debt
+  category: plan
+  message: "Bola agreed to pay 10k weekly from next Monday"
+  invoices:
+    - {id: c9d0e1f2, debtor: Bola, amount: 60000, item: shoes, due: -5d}
+  expect: {kind: plan, invoice_id: c9d0e1f2, amount_ngn: 10000, plan_every: week, due_date: monday}
+
+- name: one-off-date-is-promise-not-plan
+  category: plan
+  message: "Bola will pay everything on the 30th"
+  invoices:
+    - {id: c9d0e1f2, debtor: Bola, amount: 60000, item: shoes, due: -5d}
+  expect: {kind: [promise, update], invoice_id: c9d0e1f2, unset: [plan_every]}
