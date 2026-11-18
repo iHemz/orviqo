@@ -16,6 +16,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
+from orviqo.adapters.alerts import describe, make_alerter
 from orviqo.adapters.db import make_engine
 from orviqo.adapters.sql_businesses import SqlAlchemyBusinessStore
 from orviqo.adapters.sql_chases import SqlAlchemyChaseStore
@@ -77,12 +78,16 @@ async def run_once() -> tuple[int, int]:
 
 
 async def run_forever(interval_hours: float) -> None:
+    alerter = make_alerter(settings.orviqo_alert_ntfy_topic)
     while True:
         try:
             reminded, chased = await run_once()
             log.info("collections run: %d owner digest(s), %d debtor chase(s)", reminded, chased)
-        except Exception:
+            summary = f"Sent {reminded} digest(s), {chased} chase(s)."
+            await alerter.alert("Orviqo daily run", summary, urgent=False)
+        except Exception as exc:
             log.exception("collections run failed")
+            await alerter.alert("Orviqo daily run failed", describe(exc))
         await asyncio.sleep(interval_hours * 3600)
 
 

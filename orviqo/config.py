@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     # not a secret: it powers the /start click-to-chat link. Empty = /start is off.
     whatsapp_display_number: str = ""
 
+    # Operator alerts (server errors, the daily run's summary) via ntfy.sh: a long,
+    # unguessable topic name you subscribe to in the ntfy app. Empty = logged only.
+    orviqo_alert_ntfy_topic: str = ""
+
     # Where people send privacy questions and deletion requests; shown on /privacy.
     # Empty = the page points to the WhatsApp number instead.
     orviqo_contact_email: str = ""
